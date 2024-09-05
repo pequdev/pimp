@@ -1,0 +1,36 @@
+# Ignore Python bytecode and other Python files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Ignore virtual environments
+venv/
+ENV/
+env/
+.venv/
+.Python
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Ignore cache files
+*.cache
+*.log
+*.pot
+*.pyc
+
+# Ignore specific operating system files
+.DS_Store
+Thumbs.db
+
+# Ignore IDE or editor specific files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ignore ChromeDriver binaries (if manually placed)
+chromedriver
+
+# Ignore output files (if any)
+output/
