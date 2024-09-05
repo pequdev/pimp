@@ -1,0 +1,6 @@
+selenium
+pandas
+click
+rich
+pytest
+pytest-mock
