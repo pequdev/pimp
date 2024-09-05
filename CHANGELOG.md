@@ -2,6 +2,16 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.10.0] - 2023-09-06
+### Nowe funkcjonalności:
+- **Automatyczne przypisywanie stron domowych**: Dodano funkcjonalność, która automatycznie wykrywa i przypisuje strony domowe restauracji do kolumny `Website`. System rozpoznaje strony platform społecznościowych i serwisów recenzji, takich jak TripAdvisor, TheFork, Yelp, i przypisuje je do odpowiednich kolumn, zamiast klasyfikować je jako strony domowe.
+- **Obsługa nowych kolumn dla recenzji**: Linki z serwisów recenzji (TripAdvisor, TheFork) są teraz automatycznie przypisywane do odpowiednich kolumn, co umożliwia lepsze rozdzielenie danych w pliku CSV.
+- **Dynamiczne wyszukiwanie i raportowanie**: Ulepszono dynamiczne wyszukiwanie i raportowanie w czasie rzeczywistym, w tym wyświetlanie wyników przetwarzania linków społecznościowych i stron domowych z wyraźnym rozdzieleniem danych w konsoli.
+
+### Poprawki:
+- **Lepsze zarządzanie brakującymi danymi**: W przypadku braku wyników wyszukiwania dla danej platformy lub strony domowej, przypisywana jest pusta wartość (`""`) zamiast `0`, co poprawia czytelność pliku wyjściowego.
+- **Poprawione wykluczanie serwisów recenzji z kolumny `Website`**: Linki do TripAdvisor, TheFork, Yelp i innych serwisów recenzji są teraz prawidłowo wykluczane z kolumny `Website`, co eliminuje przypadkowe przypisanie tych stron jako stron domowych.
+
 ## [1.9.0] - 2023-09-06
 ### Nowe funkcjonalności:
 - **Przetwarzanie godzin otwarcia**: Dodano funkcjonalność do przetwarzania i pobierania godzin otwarcia z profili Google dla lokali gastronomicznych. Wyniki są zapisywane w kolumnie `Hours` jako string w formacie JSON, z rozbiciem na dni tygodnia.
