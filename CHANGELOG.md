@@ -2,6 +2,29 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.8.0] - 2023-09-06
+### Nowe funkcjonalności:
+- **Drzewo wyników wyszukiwania na żywo**: Ulepszono dynamiczne wyświetlanie wyników w czasie rzeczywistym, w tym strukturę drzewa HTML i pięć pierwszych wyników wyszukiwania Google dla każdej restauracji. Teraz użytkownicy mogą obserwować drzewo wyników, które jest wyświetlane natychmiast po przetworzeniu każdego zapytania.
+- **Historia wyników w drzewie**: Dodano funkcję, która wyświetla historię przetwarzanych zapytań w formie drzewa, zamiast wyświetlania tylko ostatniego wyniku po zakończeniu operacji.
+  
+### Poprawki:
+- **Poprawki w renderowaniu tabeli statusu**: Ulepszono sposób, w jaki tabela z zadaniami asynchronicznymi jest renderowana w konsoli z użyciem `rich.live`. Poprawiono równomierne rysowanie tabeli i jej aktualizację, aby wyniki były bardziej czytelne.
+
+## [1.7.0] - 2023-09-06
+### Nowe funkcjonalności:
+- **Filtrowanie śmieci z linków społecznościowych**: Zaimplementowano automatyczne usuwanie niepotrzebnych parametrów (np. `?hl=en`, `?locale`) z wyników wyszukiwania Google dla linków społecznościowych.
+- **Ulepszone budowanie zapytań**: Teraz zapytania Google są budowane na podstawie zarówno nazwy knajpy, jak i jej lokalizacji, co poprawia trafność wyników.
+
+### Poprawki:
+- **Testy jednostkowe i integracyjne**: Zaktualizowano testy jednostkowe, aby bardziej realistycznie odwzorowywały strukturę danych w CSV oraz lepiej testowały logikę aplikacji, w tym wyszukiwanie wielu platform.
+- **Poprawki obsługi wyjątków**: Ulepszono obsługę wyjątków przy zapisie pliku wynikowego, eliminując błędy związane z tworzeniem katalogów.
+
+## [1.6.0] - 2023-09-05
+### Nowe funkcjonalności:
+- **Asynchroniczne przetwarzanie brakujących danych**: Dodano funkcję `process_missing_data`, która obsługuje brakujące dane asynchronicznie i pozwala na dynamiczne monitorowanie postępu.
+- **Wyszukiwanie profili społecznościowych**: Aplikacja automatycznie uzupełnia brakujące linki do profili społecznościowych (Instagram, TikTok, Facebook, YouTube, TripAdvisor, TheFork) na podstawie wyników wyszukiwania Google.
+- **Rozszerzone logowanie z flagą verbose**: Dodano szczegółowe logowanie z użyciem `verbose`, które wyświetla informacje o strukturze strony i wyniki wyszukiwania w czasie rzeczywistym.
+
 ## [1.5.0] - 2023-09-05
 ### Nowe funkcjonalności:
 - **Mockowanie `pandas.read_csv` w testach CLI**: Użyto `unittest.mock` do mockowania funkcji `pandas.read_csv` w testach CLI, aby wyeliminować zależność od fizycznych plików CSV.

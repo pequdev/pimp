@@ -4,3 +4,6 @@ click
 rich
 pytest
 pytest-mock
+pytest-asyncio
+beautifulsoup4
+lxml

@@ -34,3 +34,6 @@ chromedriver
 
 # Ignore output files (if any)
 output/
+
+# Ignore data folder
+data/
