@@ -22,21 +22,33 @@ class Cache:
             except Exception as e:
                 console.print(f"❌ [red]Błąd podczas ładowania cache: {e}[/red]")
                 return {}
+        else:
+            console.print(f"⚠️ [yellow]Plik cache nie istnieje, utworzono nowy cache.[/yellow]")
         return {}
 
     def save_cache(self):
         """Zapisanie cache do pliku."""
         try:
+            # Sprawdzamy, czy katalog istnieje, jeśli nie - tworzymy go
+            cache_dir = os.path.dirname(self.cache_file)
+            if not os.path.exists(cache_dir):
+                os.makedirs(cache_dir)
+                console.print(f"📁 [yellow]Utworzono katalog {cache_dir} dla pliku cache.[/yellow]")
+
             with open(self.cache_file, 'w') as file:
-                json.dump(self.data, file)
+                json.dump(self.data, file, ensure_ascii=False, indent=4)
                 console.print(f"💾 [green]Zapisano cache do {self.cache_file}[/green]")
         except Exception as e:
             console.print(f"❌ [red]Błąd podczas zapisu cache: {e}[/red]")
 
     def get(self, query):
         """Pobieranie danych z cache."""
-        return self.data.get(query)
+        result = self.data.get(query)
+        if result is None:
+            console.print(f"⚠️ [yellow]Brak danych w cache dla zapytania: {query}[/yellow]")
+        return result
 
     def set(self, query, result):
         """Ustawianie wartości w cache."""
         self.data[query] = result
+        console.print(f"🔑 [blue]Dodano do cache: {query}[/blue]")

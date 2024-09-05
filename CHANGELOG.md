@@ -2,6 +2,14 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.11.0] - 2023-09-06
+### Nowe funkcjonalności:
+- **Automatyczne dopasowanie stron domowych na podstawie nazwy restauracji**: Wprowadzono mechanizm, który sprawdza, czy host strony zawiera fragment nazwy restauracji, a następnie przypisuje stronę do kolumny `Website`. Dzięki temu dokładniej identyfikowane są rzeczywiste strony domowe.
+- **Usprawnione przetwarzanie linków społecznościowych**: Linki z serwisów takich jak Instagram, Facebook, YouTube, TripAdvisor i TheFork są teraz automatycznie przypisywane do odpowiednich kolumn, co poprawia dokładność danych w pliku CSV.
+- **Nowa metoda filtrowania stron domowych**: Zaimplementowano dodatkowy warunek w metodzie `is_potential_website`, który wyklucza linki zawierające domeny serwisów społecznościowych i recenzji (np. `tripadvisor.com`, `thefork.com`), umożliwiając lepsze rozdzielenie stron domowych od platform recenzji.
+- **Lepsza integracja z konsolą**: Zaktualizowano logikę raportowania, aby precyzyjniej wyświetlać informacje o przetwarzaniu danych społecznościowych i stron domowych w czasie rzeczywistym w konsoli, z wykorzystaniem `rich.console` i `rich.table`.
+- **Obsługa wyszukiwań w Google**: Ulepszono mechanizm wyszukiwania w Google, umożliwiając bardziej precyzyjne i dynamiczne pobieranie danych na podstawie wyników wyszukiwania, z zachowaniem odpowiedniego rozdzielenia platform społecznościowych i stron domowych.
+
 ## [1.10.0] - 2023-09-06
 ### Nowe funkcjonalności:
 - **Automatyczne przypisywanie stron domowych**: Dodano funkcjonalność, która automatycznie wykrywa i przypisuje strony domowe restauracji do kolumny `Website`. System rozpoznaje strony platform społecznościowych i serwisów recenzji, takich jak TripAdvisor, TheFork, Yelp, i przypisuje je do odpowiednich kolumn, zamiast klasyfikować je jako strony domowe.
