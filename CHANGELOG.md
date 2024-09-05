@@ -2,6 +2,13 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.12.0] - 2024-09-06
+### Nowe funkcjonalności:
+- **Usprawnione zarządzanie wirtualnym środowiskiem**: Dodano nowe komendy do `Makefile`, które umożliwiają pełną automatyzację tworzenia, aktualizacji i wchodzenia w środowisko wirtualne. Nowa komenda `make update_venv` pozwala na odświeżenie środowiska po aktualizacji `requirements.txt`, a `make activate_venv` ułatwia wejście do środowiska.
+- **Wykrywanie i przypisywanie stron domowych**: Zaktualizowano algorytm wyszukiwania stron domowych restauracji. System teraz lepiej rozpoznaje strony na podstawie porównania domeny z nazwą restauracji, co umożliwia bardziej precyzyjne przypisanie odpowiednich stron do kolumny `Website`.
+- **Poprawione logowanie**: Usprawniono dynamiczne raportowanie zadań asynchronicznych za pomocą bibliotek `rich.console` oraz `rich.live`. Logowanie w czasie rzeczywistym prezentuje wyniki przetwarzania z większą szczegółowością i lepszą czytelnością.
+- **Wprowadzenie obsługi wyjątków**: Zaimplementowano zaawansowane obsługi błędów w procesie przetwarzania danych społecznościowych i godzin otwarcia. Program lepiej radzi sobie z nieprzewidzianymi sytuacjami, zapewniając stabilność działania.
+
 ## [1.11.0] - 2023-09-06
 ### Nowe funkcjonalności:
 - **Automatyczne dopasowanie stron domowych na podstawie nazwy restauracji**: Wprowadzono mechanizm, który sprawdza, czy host strony zawiera fragment nazwy restauracji, a następnie przypisuje stronę do kolumny `Website`. Dzięki temu dokładniej identyfikowane są rzeczywiste strony domowe.
