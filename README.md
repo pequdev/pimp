@@ -22,3 +22,15 @@ Sklonuj repozytorium i przejdź do katalogu projektu:
 ```bash
 git clone <repo_url>
 cd project_root
+
+## Uruchomienie aplikacji
+
+Po skonfigurowaniu środowiska i zainstalowaniu zależności, możesz uruchomić aplikację za pomocą poniższych kroków.
+
+### 1. Aktywacja wirtualnego środowiska
+
+Jeśli utworzyłeś wirtualne środowisko przy pomocy `make venv`, aktywuj je:
+
+- Dla systemów macOS/Linux:
+  ```bash
+  source venv/bin/activate

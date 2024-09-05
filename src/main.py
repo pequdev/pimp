@@ -1,3 +1,4 @@
+import os
 import click
 import asyncio
 import pandas as pd
@@ -7,7 +8,8 @@ from rich.console import Console
 from rich.progress import Progress, track
 from rich.live import Live
 from rich.table import Table
-import time
+from rich.progress import BarColumn, TimeElapsedColumn, SpinnerColumn
+from urllib.parse import urlparse, urlunparse
 
 console = Console()
 
@@ -22,55 +24,84 @@ DOMAIN_MAP = {
     'TheFork': 'thefork.com'
 }
 
-# Budowanie zapytania na podstawie nazwy baru i platformy
-def build_query(bar_name, platform):
-    return f"{bar_name} {platform}"
+# Budowanie zapytania na podstawie nazwy baru i lokalizacji
+def build_query(bar_name, location):
+    return f"{bar_name} {location}"
+
+# Funkcja czyszcząca URL z niepotrzebnych parametrów
+def clean_url(url):
+    parsed_url = urlparse(url)
+    clean_url = urlunparse(parsed_url._replace(query=''))  # Usuwamy parametry z URL-a
+    return clean_url
 
 # Dynamiczne monitorowanie zadań asyncio
 async def process_missing_data(df, cache, verbose):
     tasks = []
     found_count = 0
     missing_count = 0
-    total_tasks = len(df) * len(DOMAIN_MAP)
 
-    progress = Progress()
-    task_id = progress.add_task("[green]Przetwarzanie danych...", total=total_tasks)
+    # Przygotowanie progresu i tabeli do wyświetlania w konsoli
+    progress = Progress(
+        SpinnerColumn(),  
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "[progress.percentage]{task.percentage:>3.1f}%",
+        TimeElapsedColumn()
+    )
+    task_id = progress.add_task("[green]Przetwarzanie danych...", total=len(df))
 
-    table = Table(title="Status zadań asyncio")
+    # Tabela dla wyników wyszukiwania
+    table = Table(title="Status zadań async")
     table.add_column("Nazwa", justify="left")
     table.add_column("Platforma", justify="left")
     table.add_column("Status", justify="right")
 
-    live_table = Live(table, console=console, refresh_per_second=2)
+    live_table = Live(table, console=console, refresh_per_second=4)
 
-    async with live_table:
+    # Konwertujemy kolumny na typ str, aby uniknąć ostrzeżeń o niezgodnych typach
+    for platform in DOMAIN_MAP.keys():
+        if platform in df.columns:
+            df[platform] = df[platform].astype(str)
+
+    with progress, live_table:
         for index, row in df.iterrows():
-            for platform in DOMAIN_MAP.keys():
-                if row[platform] == 0:
-                    query = build_query(row['Name'], platform)
-                    domain = DOMAIN_MAP[platform]
-                    if verbose:
-                        console.log(f"🚀 Wyszukiwanie: {query}")
-                    task = search_google(query, domain)
-                    tasks.append((task, index, platform, row['Name']))
+            # Budowanie zapytania na podstawie nazwy i lokalizacji
+            restaurant_name = row['Name']
+            location = row['Location']
+            query = build_query(restaurant_name, location)
 
-        results = await asyncio.gather(*[task for task, _, _, _ in tasks], return_exceptions=True)
+            if verbose:
+                console.log(f"🚀 Rozpoczęcie wyszukiwania dla: {query}")
+            
+            task = search_google(query, verbose)
+            tasks.append((task, index, restaurant_name))
 
-        for i, (result, index, platform, bar_name) in enumerate(zip(results, [index for _, index, _, _ in tasks], 
-                                                                    [platform for _, _, platform, _ in tasks], 
-                                                                    [bar_name for _, _, _, bar_name in tasks])):
+        results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
+
+        for i, (result, index, restaurant_name) in enumerate(zip(results, [index for _, index, _ in tasks], 
+                                                                 [restaurant_name for _, _, restaurant_name in tasks])):
             if isinstance(result, Exception):
                 missing_count += 1
-                table.add_row(bar_name, platform, "[red]Błąd[/red]")
+                table.add_row(restaurant_name, "Wszystkie platformy", "[red]Błąd[/red]")
                 if verbose:
-                    console.log(f"[bold red]❌ Błąd: {result}[/bold red]")
+                    console.log(f"[bold red]❌ Wystąpił błąd podczas wyszukiwania dla '{restaurant_name}': {result}[/bold red]")
             else:
                 found_count += 1
-                df.at[index, platform] = result
-                table.add_row(bar_name, platform, "[green]Zakończono[/green]")
+
+                # Wyświetlanie wyniku w zwięzły sposób
+                if verbose:
+                    console.log(f"🔍 Wynik wyszukiwania dla '{restaurant_name}' zakończony pomyślnie.")
+
+                # Czyszczenie URL-i z niepotrzebnych parametrów i aktualizacja tabeli
+                for platform in DOMAIN_MAP.keys():
+                    platform_key = platform.lower()
+                    if result.get(platform_key):
+                        clean_link = clean_url(result[platform_key])  # Usunięcie zbędnych parametrów
+                        df.at[index, platform] = clean_link
+                        table.add_row(restaurant_name, platform, "[green]Zakończono[/green]")
 
             progress.update(task_id, advance=1)
-            time.sleep(0.1)
+            await asyncio.sleep(0.1)
 
     return df, found_count, missing_count
 
@@ -112,6 +143,14 @@ def main(input_file, output_file, use_cache, verbose, social):
     updated_df, found_count, missing_count = asyncio.run(process_missing_data(df, cache, verbose))
 
     # Zapisanie zaktualizowanego pliku CSV
+    output_dir = os.path.dirname(output_file)
+    if output_dir and not os.path.exists(output_dir):
+        try:
+            os.makedirs(output_dir, exist_ok=True)  # Używamy exist_ok=True, aby zapobiec błędom
+        except OSError as exc:
+            console.print(f"[bold red]❌ Błąd podczas tworzenia katalogu: {exc}[/bold red]")
+            return
+    
     updated_df.to_csv(output_file, index=False)
     console.print(f"[bold green]✅ Zapisano zaktualizowany plik CSV w {output_file}.[/bold green]")
 
