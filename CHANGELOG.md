@@ -2,6 +2,16 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.9.0] - 2023-09-06
+### Nowe funkcjonalności:
+- **Przetwarzanie godzin otwarcia**: Dodano funkcjonalność do przetwarzania i pobierania godzin otwarcia z profili Google dla lokali gastronomicznych. Wyniki są zapisywane w kolumnie `Hours` jako string w formacie JSON, z rozbiciem na dni tygodnia.
+- **Ulepszone logowanie i raportowanie**: Wprowadzono ujednolicone logowanie operacji za pomocą `rich.console`, w tym raportowanie statusu przetwarzania zarówno danych społecznościowych, jak i godzin otwarcia.
+  
+### Poprawki:
+- **Refaktoryzacja klasy `Scraper`**: Ujednolicono sposób inicjalizacji i zamykania WebDrivera oraz wprowadzono obsługę parsowania HTML za pomocą BeautifulSoup. Dodano bezpieczne zarządzanie sesjami przeglądarki.
+- **Optymalizacja klasy `Process`**: Zaimplementowano obsługę cache dla danych społecznościowych i godzin otwarcia, co przyspiesza ponowne przetwarzanie zapytań. Dodano automatyczne tworzenie kolumny `SocialData`, jeśli nie istnieje.
+- **Poprawa obsługi cache**: W klasie `Cache` wprowadzono obsługę błędów odczytu/zapisu pliku cache oraz dodano logowanie operacji zapisu i ładowania cache, co usprawnia śledzenie stanu danych.
+  
 ## [1.8.0] - 2023-09-06
 ### Nowe funkcjonalności:
 - **Drzewo wyników wyszukiwania na żywo**: Ulepszono dynamiczne wyświetlanie wyników w czasie rzeczywistym, w tym strukturę drzewa HTML i pięć pierwszych wyników wyszukiwania Google dla każdej restauracji. Teraz użytkownicy mogą obserwować drzewo wyników, które jest wyświetlane natychmiast po przetworzeniu każdego zapytania.

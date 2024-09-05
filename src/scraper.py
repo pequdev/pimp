@@ -1,89 +1,140 @@
 from selenium import webdriver
-from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
 from bs4 import BeautifulSoup
-import time
+import asyncio
 from rich.console import Console
-from rich.tree import Tree
-from rich.live import Live
 from rich.panel import Panel
+from rich.table import Table
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 console = Console()
 
-async def search_google(query, verbose=False):
-    # Uruchomienie ChromeDrivera
-    options = webdriver.ChromeOptions()
-    options.add_argument('--headless')  # Opcja bez interfejsu graficznego
-    driver = webdriver.Chrome(options=options)
+class Scraper:
+    
+    @staticmethod
+    def initialize_webdriver(headless=True):
+        """Inicjalizacja WebDrivera z odpowiednimi opcjami."""
+        options = Options()
+        if headless:
+            options.add_argument('--headless')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+        return driver
 
-    try:
-        search_url = f"https://www.google.es/search?q={query}"
-        driver.get(search_url)
+    @staticmethod
+    def close_webdriver(driver):
+        """Zamyka WebDrivera."""
+        if driver:
+            driver.quit()
 
-        # Opcjonalnie: dodaj opóźnienie, aby wyniki miały czas na załadowanie
-        time.sleep(2)
+    @staticmethod
+    def parse_page(html_content):
+        """Metoda do parsowania HTML za pomocą BeautifulSoup."""
+        return BeautifulSoup(html_content, 'html.parser')
 
-        # Pobierz źródło strony
-        page_source = driver.page_source
-
-        # Przetwarzanie HTML za pomocą BeautifulSoup
-        soup = BeautifulSoup(page_source, 'html.parser')
-
-        # Filtrowanie wyników wyszukiwania Google - tylko rzeczywiste wyniki
-        search_results = soup.find_all('div', class_='tF2Cxc', limit=5)  # 'tF2Cxc' to klasa div dla wyników wyszukiwania
-
-        # Tworzenie drzewa wyników
-        tree = Tree(f"🌐 Wyniki wyszukiwania dla zapytania: '{query}'")
-
-        if search_results:
-            for result in search_results:
-                # Pobieranie tytułu wyniku
-                title = result.find('h3').text if result.find('h3') else "Brak tytułu"
-                
-                # Pobieranie linku
-                link = result.find('a')['href'] if result.find('a') else "Brak linku"
-
-                # Dodawanie do drzewa wyników
-                tree.add(f"[blue]{title}[/blue] -> [green]{link}[/green]")
+    @staticmethod
+    def report(message, status="info"):
+        """Unified method for reporting to console using rich."""
+        if status == "info":
+            console.print(f"ℹ️  {message}")
+        elif status == "success":
+            console.print(f"[green]✅  {message}[/green]")
+        elif status == "error":
+            console.print(f"[red]❌  {message}[/red]")
         else:
-            tree.add("[red]Brak wyników wyszukiwania[/red]")
+            console.print(message)
 
-        # Wyświetlanie drzewa wyników
-        if verbose:
-            console.print(Panel(tree, title="Drzewo wyników wyszukiwania", expand=False))
+    @staticmethod
+    async def search_google(query, verbose=False):
+        """Funkcja do wyszukiwania w Google i znajdowania wyników społecznościowych."""
+        driver = Scraper.initialize_webdriver()
 
-        # Znajdowanie linków społecznościowych na podstawie tych wyników
-        links = soup.find_all('a', href=True)
-        social_links = {
-            'instagram': None,
-            'tiktok': None,
-            'facebook': None,
-            'youtube': None,
-            'tripadvisor': None,
-            'thefork': None
-        }
+        try:
+            search_url = f"https://www.google.es/search?q={query}"
+            driver.get(search_url)
 
-        for link in links:
-            href = link['href']
-            if 'instagram.com' in href and not social_links['instagram']:
-                social_links['instagram'] = href
-            elif 'tiktok.com' in href and not social_links['tiktok']:
-                social_links['tiktok'] = href
-            elif 'facebook.com' in href and not social_links['facebook']:
-                social_links['facebook'] = href
-            elif 'youtube.com' in href and not social_links['youtube']:
-                social_links['youtube'] = href
-            elif 'tripadvisor.com' in href and not social_links['tripadvisor']:
-                social_links['tripadvisor'] = href
-            elif 'thefork.com' in href and not social_links['thefork']:
-                social_links['thefork'] = href
+            await asyncio.sleep(2)
 
-        # Zwracanie znalezionych linków społecznościowych
-        return social_links
+            page_source = driver.page_source
+            soup = Scraper.parse_page(page_source)
 
-    except Exception as e:
-        if verbose:
-            console.print(f"❌ [red]Error during search[/red]: {str(e)}")
-        return -1
+            search_results = soup.find_all('div', class_='tF2Cxc', limit=5)
 
-    finally:
-        driver.quit()
+            if verbose:
+                table = Table(title=f"Wyniki wyszukiwania dla zapytania: {query}", show_lines=True)
+                table.add_column("Tytuł", justify="left")
+                table.add_column("Link", justify="left")
+
+            social_links = {
+                'instagram': None,
+                'tiktok': None,
+                'facebook': None,
+                'youtube': None,
+                'tripadvisor': None,
+                'thefork': None
+            }
+
+            if search_results:
+                for result in search_results:
+                    title = result.find('h3').text if result.find('h3') else "Brak tytułu"
+                    link = result.find('a')['href'] if result.find('a') else "Brak linku"
+                    
+                    if verbose:
+                        table.add_row(title, link)
+
+                    if 'instagram.com' in link:
+                        social_links['instagram'] = link
+                    elif 'tiktok.com' in link:
+                        social_links['tiktok'] = link
+                    elif 'facebook.com' in link:
+                        social_links['facebook'] = link
+                    elif 'youtube.com' in link:
+                        social_links['youtube'] = link
+                    elif 'tripadvisor.com' in link:
+                        social_links['tripadvisor'] = link
+                    elif 'thefork.com' in link:
+                        social_links['thefork'] = link
+
+            if verbose:
+                console.print(table)
+
+            return social_links
+
+        except Exception as e:
+            Scraper.report(f"Błąd podczas wyszukiwania w Google: {e}", "error")
+            return -1
+        finally:
+            Scraper.close_webdriver(driver)
+
+    @staticmethod
+    async def get_opening_hours(google_url, verbose=False):
+        """Funkcja do pobierania godzin otwarcia z Google Maps."""
+        driver = Scraper.initialize_webdriver()
+
+        try:
+            if verbose:
+                Scraper.report(f"Pobieranie godzin otwarcia dla: {google_url}")
+
+            driver.get(google_url)
+            await asyncio.sleep(3)
+
+            page_source = driver.page_source
+            soup = Scraper.parse_page(page_source)
+
+            hours_element = soup.find('div', class_='hours-class')
+            hours_data = hours_element.text if hours_element else None
+
+            if hours_data:
+                Scraper.report(f"Znalezione godziny otwarcia: {hours_data}", "success")
+            else:
+                Scraper.report(f"Nie znaleziono godzin otwarcia dla {google_url}", "error")
+
+            return hours_data
+
+        except Exception as e:
+            Scraper.report(f"Błąd podczas pobierania godzin otwarcia dla {google_url}: {e}", "error")
+            return None
+        finally:
+            Scraper.close_webdriver(driver)
