@@ -1,13 +1,31 @@
 # Makefile do automatycznej konfiguracji środowiska, instalacji zależności i konfiguracji ChromeDriver
 
+VENV_DIR := venv
+REQUIREMENTS := requirements.txt
+PYTHON := $(VENV_DIR)/bin/python
+PIP := $(VENV_DIR)/bin/pip
+
 # Tworzenie i aktywacja wirtualnego środowiska
 venv:
-	python3 -m venv venv
-	. venv/bin/activate
+	python3 -m venv $(VENV_DIR)
+	$(PIP) install --upgrade pip
 
 # Instalacja zależności w wirtualnym środowisku
 install: venv
-	venv/bin/pip install -r requirements.txt
+	$(PIP) install -r $(REQUIREMENTS)
+
+# Sprawdzenie, czy requirements.txt został zmodyfikowany i aktualizacja zależności
+update_venv: venv
+	@if [ $(REQUIREMENTS) -nt $(VENV_DIR) ]; then \
+		echo "Zmieniono requirements.txt, aktualizacja zależności..."; \
+		$(PIP) install -r $(REQUIREMENTS); \
+	else \
+		echo "Środowisko venv jest aktualne."; \
+	fi
+
+# Usuwanie starego wirtualnego środowiska
+clean_venv:
+	rm -rf $(VENV_DIR)
 
 # Instalacja ChromeDriver za pomocą Homebrew
 chromedriver:
@@ -17,3 +35,17 @@ chromedriver:
 	else \
 		echo "ChromeDriver już zainstalowany."; \
 	fi
+
+# Wejście do wirtualnego środowiska
+activate:
+	@echo "Wejdź do środowiska: source $(VENV_DIR)/bin/activate"
+
+# Wyświetlenie pomocy
+help:
+	@echo "Dostępne komendy:"
+	@echo "  make venv         - Tworzy wirtualne środowisko"
+	@echo "  make install      - Instaluje zależności"
+	@echo "  make update_venv  - Aktualizuje zależności po zmianie requirements.txt"
+	@echo "  make clean_venv   - Usuwa stare środowisko venv"
+	@echo "  make chromedriver - Instaluje ChromeDriver"
+	@echo "  make activate     - Wyświetla polecenie do wejścia w środowisko"
