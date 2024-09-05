@@ -24,13 +24,35 @@ DOMAIN_MAP = {
 class Process:
     @staticmethod
     def clean_url(url):
+        """Czyści URL z parametrów zapytania."""
         parsed_url = urlparse(url)
-        clean_url = urlunparse(parsed_url._replace(query=''))  # Usuwamy parametry z URL-a
+        clean_url = urlunparse(parsed_url._replace(query=''))
         return clean_url
 
     @staticmethod
     def build_query(bar_name, location):
+        """Buduje zapytanie do wyszukiwania w Google na podstawie nazwy lokalu i lokalizacji."""
         return f"{bar_name} {location}"
+
+    @staticmethod
+    def enforce_dtypes(df):
+        """Wymusza odpowiednie typy danych w kolumnach."""
+        columns_to_convert = ['Website', 'Google', 'UberEats', 'Instagram', 'TikTok', 'Facebook', 'YouTube', 'TripAdvisor', 'TheFork']
+        df[columns_to_convert] = df[columns_to_convert].astype('object')
+        return df
+
+    @staticmethod
+    def is_potential_website_based_on_name(website_link, restaurant_name):
+        """
+        Funkcja, która ocenia, czy domena strony zawiera nazwę restauracji lub jej fragmenty.
+        Sprawdza, czy fragment nazwy restauracji jest częścią domeny.
+        """
+        parsed_website = urlparse(website_link).netloc.lower()
+        restaurant_name_words = restaurant_name.lower().split()
+
+        # Jeśli więcej niż jedno słowo pasuje do domeny, uznajemy stronę za prawdopodobną stronę domową
+        matching_words = [word for word in restaurant_name_words if word in parsed_website]
+        return len(matching_words) > 0
 
     @staticmethod
     async def process_social_data(df, cache, verbose):
@@ -38,81 +60,46 @@ class Process:
         found_count = 0
         missing_count = 0
 
-        table = Table(title="Status zadań async")
-        table.add_column("Nazwa", justify="left")
-        table.add_column("Platforma", justify="left")
-        table.add_column("Status", justify="right")
+        table = Table(title="Status wyszukiwania danych społecznościowych i stron domowych")
+        table.add_column("Nazwa", justify="left", style="cyan", no_wrap=True)
+        table.add_column("Platforma", justify="left", style="magenta")
+        table.add_column("Status", justify="center", style="green")
 
-        live_table = Live(table, console=console, refresh_per_second=4)
-
-        for platform in DOMAIN_MAP.keys():
-            if platform in df.columns:
-                df[platform] = df[platform].astype(str)
-
-        with live_table:
+        with Live(table, console=console, refresh_per_second=4):
             for index, row in df.iterrows():
                 restaurant_name = row['Name']
                 location = row['Location']
-                query = Process.build_query(restaurant_name, location)
+                query = f"{restaurant_name} {location}"
 
                 if verbose:
-                    tree = Tree(f"🚀 Rozpoczęcie wyszukiwania dla: {query}")
+                    console.print(f"ℹ️  Rozpoczęcie wyszukiwania dla: {query}")
                 
-                task = Scraper.search_google(query, verbose)
+                task = Scraper.search_google(query, restaurant_name, verbose)
                 tasks.append((task, index, restaurant_name))
 
             results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
 
-            for i, (result, index, restaurant_name) in enumerate(zip(results, [index for _, index, _ in tasks], 
-                                                                     [restaurant_name for _, _, restaurant_name in tasks])):
+            for result, index, restaurant_name in zip(results, [index for _, index, _ in tasks], 
+                                                    [restaurant_name for _, _, restaurant_name in tasks]):
                 if isinstance(result, Exception) or result == -1 or result is None:
                     missing_count += 1
                     table.add_row(restaurant_name, "Wszystkie platformy", "[red]Brak danych[/red]")
-                    if verbose:
-                        tree.add(f"[red]❌ Brak wyników wyszukiwania dla '{restaurant_name}'")
                 else:
                     found_count += 1
-
-                    if verbose:
-                        tree.add(f"🔍 Wynik wyszukiwania dla '{restaurant_name}' zakończony pomyślnie.")
-
-                    # Przetwarzanie zwróconych linków społecznościowych i strony domowej
                     social_data = result.get('social_links', {})
                     website_link = result.get('website', "")
 
-                    for platform in DOMAIN_MAP.keys():
-                        platform_key = platform.lower()
-                        if social_data.get(platform_key):
-                            clean_link = Process.clean_url(social_data[platform_key])  # Usunięcie zbędnych parametrów
-                            df.at[index, platform] = clean_link
-                            table.add_row(restaurant_name, platform, "[green]Zakończono[/green]")
-                        else:
-                            df.at[index, platform] = ""
+                    # Przetwarzanie linków społecznościowych
+                    for platform, platform_url in social_data.items():
+                        df.at[index, platform] = platform_url if platform_url else ""
+                        table.add_row(restaurant_name, platform, "[green]Zakończono[/green]")
 
-                    # Przypisanie linków do odpowiednich kolumn
-                    tripadvisor_link = social_data.get('tripadvisor', "")
-                    thefork_link = social_data.get('thefork', "")
-
-                    if tripadvisor_link:
-                        df.at[index, 'TripAdvisor'] = Process.clean_url(tripadvisor_link)
-                    else:
-                        df.at[index, 'TripAdvisor'] = ""
-
-                    if thefork_link:
-                        df.at[index, 'TheFork'] = Process.clean_url(thefork_link)
-                    else:
-                        df.at[index, 'TheFork'] = ""
-
-                    # Aktualizacja kolumny 'Website' - wykluczenie stron z TripAdvisor, TheFork, Yelp, itp.
-                    if website_link and not any(platform in website_link for platform in ['tripadvisor.com', 'thefork.com', 'yelp.com']):
-                        clean_website_link = Process.clean_url(website_link)
-                        df.at[index, 'Website'] = clean_website_link
+                    # Sprawdzanie linków domowych (jeśli są)
+                    if website_link:
+                        df.at[index, 'Website'] = website_link
                         table.add_row(restaurant_name, "Strona domowa", "[green]Zakończono[/green]")
                     else:
                         df.at[index, 'Website'] = ""
-
-            if verbose:
-                console.print(Panel(tree, title="Wynik wyszukiwania", expand=False))
 
         return df, found_count, missing_count
 
@@ -143,6 +130,7 @@ class Process:
             # Równoczesne uruchomienie wszystkich zadań
             await asyncio.gather(*tasks)
 
+        df = Process.enforce_dtypes(df)
         return df
     
     @staticmethod

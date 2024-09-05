@@ -26,36 +26,55 @@ def main(input_file, output_file, use_cache, verbose, social, hours):
         click.echo(main.get_help(click.Context(main)))
         return
 
+    # Próba wczytania pliku CSV
     try:
         df = pd.read_csv(input_file)
         console.print(f"[bold green]✅ Wczytano plik {input_file}.[/bold green]")
     except FileNotFoundError:
         console.print(f"[bold red]❌ Plik {input_file} nie został znaleziony.[/bold red]")
         return
+    except Exception as e:
+        console.print(f"[bold red]❌ Błąd przy wczytywaniu pliku: {e}[/bold red]")
+        return
 
+    # Inicjalizacja cache (jeśli wybrano opcję)
     cache = Cache() if use_cache else None
 
     # Przetwarzanie danych społecznościowych
     if social:
-        df, found_count, missing_count = asyncio.run(Process.process_social_data(df, cache, verbose))
-        console.print(f"[bold green]✅ Przetworzono {found_count} znalezionych rekordów i {missing_count} brakujących.[/bold green]")
+        try:
+            df, found_count, missing_count = asyncio.run(Process.process_social_data(df, cache, verbose))
+            console.print(f"[bold green]✅ Przetworzono {found_count} znalezionych rekordów i {missing_count} brakujących.[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]❌ Błąd przy przetwarzaniu danych społecznościowych: {e}[/bold red]")
+            return
 
     # Przetwarzanie godzin otwarcia
     if hours:
-        df = asyncio.run(Process.process_hours(df, verbose))
+        try:
+            df = asyncio.run(Process.process_hours(df, verbose))
+        except Exception as e:
+            console.print(f"[bold red]❌ Błąd przy przetwarzaniu godzin otwarcia: {e}[/bold red]")
+            return
 
     # Zapisanie zaktualizowanego pliku CSV
     output_dir = os.path.dirname(output_file)
     if output_dir and not os.path.exists(output_dir):
         try:
             os.makedirs(output_dir, exist_ok=True)
+            console.print(f"[bold green]📁 Utworzono katalog: {output_dir}[/bold green]")
         except OSError as exc:
             console.print(f"[bold red]❌ Błąd podczas tworzenia katalogu: {exc}[/bold red]")
             return
     
-    df.to_csv(output_file, index=False)
-    console.print(f"[bold green]✅ Zapisano zaktualizowany plik CSV w {output_file}.[/bold green]")
+    try:
+        df.to_csv(output_file, index=False)
+        console.print(f"[bold green]✅ Zapisano zaktualizowany plik CSV w {output_file}.[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]❌ Błąd podczas zapisu pliku CSV: {e}[/bold red]")
+        return
 
+    # Zapis cache (jeśli używany)
     if cache:
         cache.save_cache()
 
