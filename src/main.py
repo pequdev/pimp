@@ -22,9 +22,11 @@ DOMAIN_MAP = {
     'TheFork': 'thefork.com'
 }
 
+# Budowanie zapytania na podstawie nazwy baru i platformy
 def build_query(bar_name, platform):
     return f"{bar_name} {platform}"
 
+# Dynamiczne monitorowanie zadań asyncio
 async def process_missing_data(df, cache, verbose):
     tasks = []
     found_count = 0
@@ -72,6 +74,7 @@ async def process_missing_data(df, cache, verbose):
 
     return df, found_count, missing_count
 
+# Dodajemy CLI przy pomocy Click
 @click.command()
 @click.option('--input_file', required=True, help='Ścieżka do pliku CSV z danymi.')
 @click.option('--output_file', default='output.csv', help='Ścieżka do pliku, gdzie zapisane zostaną zaktualizowane dane.')
@@ -79,11 +82,19 @@ async def process_missing_data(df, cache, verbose):
 @click.option('--verbose', is_flag=True, help='Wyświetlaj szczegółowe informacje o przebiegu.')
 @click.option('--social', is_flag=True, help='Uzupełniaj brakujące profile społecznościowe.')
 def main(input_file, output_file, use_cache, verbose, social):
+    """
+    Skrypt uzupełnia brakujące dane w pliku CSV poprzez wyszukiwanie informacji na Google.
+    Plik CSV należy zapodać przez --input_file, a wynik zostanie zapisany w --output_file.
+    """
+    
+    # Sprawdzamy, czy podano flagę --social
     if not social:
         console.print("[bold red]❌ Nie wybrano funkcji. Użyj --help, aby zobaczyć dostępne opcje.[/bold red]")
+        # Wyświetlenie standardowego helpa
         click.echo(main.get_help(click.Context(main)))
         return
 
+    # Ładowanie pliku CSV
     try:
         df = pd.read_csv(input_file)
         console.print(f"[bold green]✅ Wczytano plik {input_file}.[/bold green]")
@@ -94,10 +105,13 @@ def main(input_file, output_file, use_cache, verbose, social):
     if verbose:
         console.print(f"[bold green]ℹ️ Używanie cache: {use_cache}[/bold green]" if use_cache else "[bold yellow]⚠️ Cache nie używany[/bold yellow]")
 
+    # Ładowanie cache
     cache = Cache() if use_cache else None
 
+    # Przetwarzanie brakujących danych
     updated_df, found_count, missing_count = asyncio.run(process_missing_data(df, cache, verbose))
 
+    # Zapisanie zaktualizowanego pliku CSV
     updated_df.to_csv(output_file, index=False)
     console.print(f"[bold green]✅ Zapisano zaktualizowany plik CSV w {output_file}.[/bold green]")
 
