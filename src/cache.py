@@ -5,7 +5,7 @@ from rich.console import Console
 console = Console()
 
 class Cache:
-    def __init__(self, cache_file='data/cache.json'):
+    def __init__(self, cache_file='../data/cache.json'):
         self.cache_file = cache_file
         self.data = self.load_cache()
 
@@ -50,5 +50,8 @@ class Cache:
 
     def set(self, query, result):
         """Ustawianie wartości w cache."""
-        self.data[query] = result
-        console.print(f"🔑 [blue]Dodano do cache: {query}[/blue]")
+        if result:  # Tylko jeśli są wyniki
+            self.data[query] = result
+            console.print(f"🔑 [blue]Dodano do cache: {query}[/blue]")
+        else:
+            console.print(f"⚠️ [yellow]Brak wyników, nie dodano do cache.[/yellow]")
