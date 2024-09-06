@@ -2,6 +2,18 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.13.0] - 2024-09-06
+#### Nowe funkcjonalności:
+- **Poprawki zapisu cache**: Ulepszono logikę zapisu danych do pliku `cache.json`. Dodano sprawdzenie, czy dane są dostępne przed zapisem oraz dodatkowe logi, które informują, czy operacja zapisu zakończyła się sukcesem.
+- **Lepsza obsługa zapytań bez wyników**: Zaimplementowano mechanizm, który w przypadku braku wyników wyszukiwania nie zapisuje pustych danych do cache, a jedynie loguje ostrzeżenie.
+- **Korekta ścieżki do pliku cache**: Wprowadzono poprawki dotyczące ścieżki do pliku cache, co zapewnia poprawne tworzenie i zapisywanie danych w odpowiednim katalogu.
+  
+#### Poprawki błędów:
+- **Naprawa pustego pliku cache**: Rozwiązano problem, w którym plik `cache.json` był tworzony, ale pozostawał pusty z powodu braku wyników wyszukiwania lub błędów w operacjach zapisu.
+
+#### Zmiany techniczne:
+- **Refaktoryzacja kodu klasy `Cache`**: Zoptymalizowano kod, w tym lepsze zarządzanie błędami podczas odczytu i zapisu pliku cache.
+
 ## [1.12.0] - 2024-09-06
 ### Nowe funkcjonalności:
 - **Usprawnione zarządzanie wirtualnym środowiskiem**: Dodano nowe komendy do `Makefile`, które umożliwiają pełną automatyzację tworzenia, aktualizacji i wchodzenia w środowisko wirtualne. Nowa komenda `make update_venv` pozwala na odświeżenie środowiska po aktualizacji `requirements.txt`, a `make activate_venv` ułatwia wejście do środowiska.
