@@ -1,6 +1,4 @@
 import os
-os.sys.path.append(os.path.join(os.path.dirname(__file__), 'src'))
-
 import click
 import asyncio
 import pandas as pd
@@ -54,7 +52,8 @@ def main(input_file, output_file, use_cache, verbose, social, hours):
     # Przetwarzanie godzin otwarcia
     if hours:
         try:
-            df = asyncio.run(Process.process_hours(df, verbose))
+            df, found_count, missing_count = asyncio.run(Process.process_hours(df, verbose))
+            console.print(f"[bold green]✅ Przetworzono {found_count} znalezionych rekordów i {missing_count} brakujących.[/bold green]")
         except Exception as e:
             console.print(f"[bold red]❌ Błąd przy przetwarzaniu godzin otwarcia: {e}[/bold red]")
             return

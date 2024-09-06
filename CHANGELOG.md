@@ -2,6 +2,17 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.14.0] - 2024-09-06
+#### Nowe funkcjonalności:
+- **Poprawa logiki klikania przycisku godzin otwarcia**: Ulepszono mechanizm znajdowania i klikania przycisku "open hours" w Google Maps. Teraz system lokalizuje element zawierający `jsaction="openhours"`, a następnie klika w jego element nadrzędny, co umożliwia poprawne otwarcie panelu z godzinami otwarcia.
+- **Dodanie sprawdzania pełnego załadowania strony**: Wprowadzono mechanizm WebDriverWait, który upewnia się, że strona została w pełni załadowana przed wykonaniem jakichkolwiek operacji związanych z kliknięciem przycisku.
+
+#### Poprawki błędów:
+- **Poprawa obsługi elementu `jsaction`**: Naprawiono błąd związany z niewłaściwym wyszukiwaniem przycisku godzin otwarcia. Teraz `jsaction` jest wyszukiwany na podstawie zawartości, co rozwiązuje problem z nieodnalezieniem elementu na stronie.
+
+#### Zmiany techniczne:
+- **Lepsze logowanie elementów nadrzędnych**: Dodano logowanie elementu nadrzędnego przycisku "open hours" w konsoli, co ułatwia debugowanie i diagnozowanie problemów podczas operacji kliknięcia.
+
 ## [1.13.0] - 2024-09-06
 #### Nowe funkcjonalności:
 - **Poprawki zapisu cache**: Ulepszono logikę zapisu danych do pliku `cache.json`. Dodano sprawdzenie, czy dane są dostępne przed zapisem oraz dodatkowe logi, które informują, czy operacja zapisu zakończyła się sukcesem.
