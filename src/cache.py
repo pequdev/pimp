@@ -38,6 +38,7 @@ class Cache:
             with open(self.cache_file, 'w') as file:
                 json.dump(self.data, file, ensure_ascii=False, indent=4)
                 console.print(f"💾 [green]Zapisano cache do {self.cache_file}[/green]")
+
         except Exception as e:
             console.print(f"❌ [red]Błąd podczas zapisu cache: {e}[/red]")
 

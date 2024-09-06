@@ -1,7 +1,7 @@
 import json
 import pandas as pd
 import asyncio
-from scraper import Scraper
+from src.scraper import Scraper
 from urllib.parse import urlparse, urlunparse
 from rich.console import Console
 from rich.table import Table
@@ -109,41 +109,36 @@ class Process:
         found_count = 0
         missing_count = 0
 
-        table = Table(title="Status zadań async")
-        table.add_column("Nazwa", justify="left")
-        table.add_column("Status", justify="right")
+        # Tabela raportu, która nie będzie dynamicznie odświeżana, a wpisy będą dodawane na bieżąco
+        table = Table(title="Status pobierania godzin otwarcia")
+        table.add_column("Nazwa", justify="left", style="cyan", no_wrap=True)
+        table.add_column("Status", justify="center", style="green")
 
-        live_table = Live(table, console=console, refresh_per_second=4)
+        for index, row in df.iterrows():
+            restaurant_name = row['Name']
+            google_url = row['Google']
 
-        with live_table:
-            for index, row in df.iterrows():
-                google_url = row['Google']
-                restaurant_name = row['Name']
+            if google_url:
+                if verbose:
+                    console.print(f"ℹ️ Rozpoczęcie pobierania godzin otwarcia dla: {restaurant_name}")
 
-                if google_url:
-                    if verbose:
-                        tree = Tree(f"🚀 Rozpoczęcie pobierania godzin otwarcia dla: {restaurant_name}")
-                    
-                    task = asyncio.create_task(Process.get_and_update_hours(df, index, google_url, restaurant_name, verbose, tree))
-                    tasks.append(task)
+                task = Scraper.get_opening_hours_from_google_maps(google_url, verbose)
+                tasks.append((task, index, restaurant_name))
 
-            # Równoczesne uruchomienie wszystkich zadań
-            await asyncio.gather(*tasks)
+        # Równoczesne uruchomienie zadań asynchronicznych
+        results = await asyncio.gather(*[task for task, _, _ in tasks], return_exceptions=True)
 
-        df = Process.enforce_dtypes(df)
-        return df
-    
-    @staticmethod
-    async def get_and_update_hours(df, index, google_url, restaurant_name, verbose, tree):
-        try:
-            hours = await Scraper.get_opening_hours(google_url)
-            df.at[index, 'Hours'] = hours
+        for result, index, restaurant_name in zip(results, [index for _, index, _ in tasks], [restaurant_name for _, _, restaurant_name in tasks]):
+            
+            if isinstance(result, Exception) or result is None:
+                missing_count += 1
+                table.add_row(restaurant_name, "[red]Brak danych[/red]")
+            else:
+                found_count += 1
+                df.at[index, 'Hours'] = result  # Zapisanie pobranych godzin
+                table.add_row(restaurant_name, "[green]Zakończono[/green]")
 
-            if verbose:
-                tree.add(f"[green]✅ Zakończono pobieranie godzin otwarcia dla: {restaurant_name}[/green]")
-        except Exception as e:
-            if verbose:
-                tree.add(f"[red]❌ Błąd przy pobieraniu godzin otwarcia dla {restaurant_name}: {e}[/red]")
+            # Zamiast dynamicznego odświeżania, wyświetlaj wynik na bieżąco
+            console.print(table)
 
-        if verbose:
-            console.print(Panel(tree, title=f"Wynik pobierania godzin otwarcia dla: {restaurant_name}", expand=False))
+        return df, found_count, missing_count
