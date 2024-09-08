@@ -6,8 +6,13 @@ import gspread
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from src.process import Process
+from src.scraper import Scraper
 from src.cache import Cache
 from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.table import Table
+from rich.layout import Layout
 
 console = Console()
 
@@ -16,7 +21,6 @@ class GoogleSheetsManager:
     SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
     def __init__(self, verbose=False):
-        # Ścieżka do pliku z poświadczeniami JSON
         self.verbose = verbose
         credentials_file = os.path.join('data', 'pequ-dev-578d98c90f74.json')
         self.creds = self.authorize_google_sheets(credentials_file)
@@ -41,7 +45,6 @@ class GoogleSheetsManager:
         if self.verbose:
             console.print(f"[yellow]🔄 Pobieranie danych z arkusza Google Sheets o ID: {sheet_id} i nazwie: {sheet_name}[/yellow]")
         
-        console.log(self.client)
         sheet = self.client.open_by_key(sheet_id).worksheet(sheet_name)
         data = sheet.get_all_records()
         
@@ -62,35 +65,56 @@ class GoogleSheetsManager:
         if self.verbose:
             console.print(f"[bold green]✅ Pomyślnie zaktualizowano dane w arkuszu {sheet_name} (ID: {sheet_id}) w zakresie {sheet_range}[/bold green]")
 
+    def create_new_sheet(self, sheet_id, original_sheet_name):
+        """Tworzy nowy arkusz na podstawie oryginalnego arkusza."""
+        if self.verbose:
+            console.print(f"[yellow]🔄 Tworzenie nowego arkusza: UPD/{original_sheet_name}...[/yellow]")
+        
+        spreadsheet = self.client.open_by_key(sheet_id)
+        new_sheet_name = f"UPD/{original_sheet_name}"
+        try:
+            spreadsheet.add_worksheet(title=new_sheet_name, rows="1000", cols="26")
+            if self.verbose:
+                console.print(f"[bold green]✅ Nowy arkusz {new_sheet_name} został utworzony.[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]❌ Błąd podczas tworzenia nowego arkusza: {e}[/bold red]")
+            raise e
+        return new_sheet_name
+
+
 class CommandManager:
-    def __init__(self, df, cache, verbose):
+    def __init__(self, df, cache, verbose, table, log_panel, layout, live):
         self.df = df
         self.cache = cache
         self.verbose = verbose
+        self.table = table
+        self.log_panel = log_panel
+        self.layout = layout
+        self.live = live
 
     async def process_social_data(self):
         """Przetwarzanie danych społecznościowych."""
-        try:
-            self.df, found_count, missing_count = await Process.process_social_data(self.df, self.cache, self.verbose)
-            console.print(f"[bold green]✅ Przetworzono {found_count} znalezionych rekordów i {missing_count} brakujących.[/bold green]")
-        except Exception as e:
-            console.print(f"[bold red]❌ Błąd przy przetwarzaniu danych społecznościowych: {e}[/bold red]")
-            raise
+        # Use Process class for live rendering
+        df, found_count, missing_count = await Process.process_social_data(
+            self.df, self.cache, self.verbose, self.table, self.log_panel, self.layout, self.live
+        )
+        return df, found_count, missing_count
 
     async def process_hours(self):
         """Przetwarzanie godzin otwarcia."""
-        try:
-            self.df, found_count, missing_count = await Process.process_hours(self.df, self.verbose)
-            console.print(f"[bold green]✅ Przetworzono {found_count} znalezionych rekordów i {missing_count} brakujących.[/bold green]")
-        except Exception as e:
-            console.print(f"[bold red]❌ Błąd przy przetwarzaniu godzin otwarcia: {e}[/bold red]")
-            raise
+        # Use Process class for live rendering
+        df, found_count, missing_count = await Process.process_hours(
+            self.df, self.verbose, self.table, self.log_panel, self.layout, self.live
+        )
+        return df, found_count, missing_count
+
 
 def initialize_cache(use_cache):
     """Inicjalizacja cache."""
     if use_cache:
         return Cache()
     return None
+
 
 @click.command()
 @click.option('--sheet_id', required=True, help='ID arkusza Google Sheets z danymi.')
@@ -125,16 +149,30 @@ def main(sheet_id, sheet_name, sheet_range, use_cache, verbose, social, hours):
     # Inicjalizacja cache (jeśli wybrano opcję)
     cache = initialize_cache(use_cache)
 
-    # Inicjalizacja klasy przetwarzania danych
-    command_manager = CommandManager(df, cache, verbose)
+    # Inicjalizacja layoutu i tabeli
+    table = Table(title="Status przetwarzania")
+    table.add_column("Nazwa", justify="left", style="cyan", no_wrap=True)
+    table.add_column("Status", justify="center", style="green")
+    
+    log_panel = Panel("Logi będą się tutaj pojawiać", title="Logi", border_style="magenta")
+    
+    # Układ dla layoutu
+    layout = Layout()
+    layout.split_row(
+        Layout(table, name="table"),
+        Layout(log_panel, name="log")
+    )
 
-    # Przetwarzanie danych społecznościowych
-    if social:
-        asyncio.run(command_manager.process_social_data())
+    with Live(layout, console=console, refresh_per_second=4) as live:
+        command_manager = CommandManager(df, cache, verbose, table, log_panel, layout, live)
 
-    # Przetwarzanie godzin otwarcia
-    if hours:
-        asyncio.run(command_manager.process_hours())
+        # Przetwarzanie danych społecznościowych
+        if social:
+            asyncio.run(command_manager.process_social_data())
+
+        # Przetwarzanie godzin otwarcia
+        if hours:
+            asyncio.run(command_manager.process_hours())
 
     # Tworzenie nowego arkusza o nazwie UPD/nazwa_oryginalna
     try:

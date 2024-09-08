@@ -15,6 +15,9 @@ import asyncio
 import re
 import os
 from rich.console import Console
+from rich.panel import Panel
+from rich.live import Live
+from rich.table import Table
 
 console = Console()
 
@@ -23,14 +26,12 @@ class Scraper:
     @staticmethod
     def initialize_webdriver(headless=True):
         """Inicjalizacja WebDrivera z odpowiednimi opcjami oraz symulowaną geolokalizacją."""
-        
         options = Options()
 
         latitude = 38.34486
         longitude = 0.48550
         accuracy = 100
         
-        # Ustawienia headless, jeśli wymagane
         if headless:
             options.add_argument('--headless=new')  # Nowa wersja headless
 
@@ -43,14 +44,10 @@ class Scraper:
         options.add_argument('--start-maximized')
         options.add_argument('--disable-extensions')
 
-        # Pobranie katalogu nadrzędnego
         parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         profile_path = os.path.join(parent_dir, 'data/chrome_profile')
-        
-        # Dodanie użytkownika, aby pominąć wybór wyszukiwarki
         options.add_argument(f"--user-data-dir={profile_path}")
 
-        # Dodatkowe opcje optymalizacyjne
         options.add_experimental_option('prefs', {
             'profile.default_content_setting_values.images': 2,
             'intl.accept_languages': 'en,en_US'
@@ -59,15 +56,13 @@ class Scraper:
         try:
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
 
-            # Symulacja geolokalizacji
-            if latitude is not None and longitude is not None:
-                driver.execute_cdp_cmd(
-                    "Emulation.setGeolocationOverride", {
-                        "latitude": latitude,
-                        "longitude": longitude,
-                        "accuracy": accuracy
-                    }
-                )
+            driver.execute_cdp_cmd(
+                "Emulation.setGeolocationOverride", {
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "accuracy": accuracy
+                }
+            )
             return driver
         except Exception as e:
             console.print(f"Błąd inicjalizacji WebDrivera: {e}")
@@ -90,12 +85,10 @@ class Scraper:
         parsed_url = urlparse(link)
         domain_segments = parsed_url.netloc.split('.')
 
-        # Sprawdza, czy nazwa restauracji występuje w domenie
         restaurant_name_words = restaurant_name.lower().split()
         if any(word in parsed_url.netloc.lower() for word in restaurant_name_words):
             return True
 
-        # Sprawdzamy, czy domena ma tylko dwa segmenty (np. lacallaita.es)
         if len(domain_segments) <= 2:
             return True
 
@@ -104,16 +97,13 @@ class Scraper:
     @staticmethod
     def sort_hours(hours_text):
         """Funkcja do wykrywania języka i sortowania godzin otwarcia od poniedziałku do niedzieli."""
-        
-        # Mapa dni tygodnia w różnych językach
         days_of_week = {
             'PL': ['Poniedziałek', 'Wtorek', 'Środa', 'Czwartek', 'Piątek', 'Sobota', 'Niedziela'],
             'EN': ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
             'DE': ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag'],
             'ES': ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
         }
-        
-        # Detekcja języka na podstawie pierwszego pasującego dnia tygodnia
+
         detected_language = None
         for lang, days in days_of_week.items():
             if any(day in hours_text for day in days):
@@ -123,22 +113,15 @@ class Scraper:
         if detected_language is None:
             raise ValueError("Nie udało się rozpoznać języka z godzin otwarcia.")
         
-        # Wyodrębnienie wszystkich dni i godzin przy pomocy wyrażenia regularnego
         hours_list = re.findall(r'(\w+),(.*?)(?=;|$)', hours_text)
-        
-        # Mapa dni tygodnia na numery (indeksy) do sortowania
         day_to_index = {day: index for index, day in enumerate(days_of_week[detected_language])}
-
-        # Sortowanie godzin na podstawie indeksów dni tygodnia
         sorted_hours = sorted(hours_list, key=lambda x: day_to_index.get(x[0], -1))
-
-        # Składanie wyników w odpowiednim formacie
         sorted_hours_text = "; ".join([f"{day},{hours.strip()}" for day, hours in sorted_hours])
 
         return sorted_hours_text
 
     @staticmethod
-    async def search_google(query, restaurant_name, verbose=False):
+    async def search_google(query, restaurant_name, table, log_panel, layout, live, verbose=False):
         """Funkcja do wyszukiwania w Google i znajdowania wyników społecznościowych oraz stron domowych."""
         driver = Scraper.initialize_webdriver()
 
@@ -147,11 +130,9 @@ class Scraper:
             driver.get(search_url)
             await asyncio.sleep(2)
 
-            # Pobranie źródła strony i parsowanie
             page_source = driver.page_source
             soup = Scraper.parse_page(page_source)
 
-            # Przetwarzanie linków
             links = soup.find_all('a', href=True)
             social_links = {
                 'instagram': None,
@@ -180,95 +161,86 @@ class Scraper:
                 elif 'http' in href and Scraper.is_potential_website(href, restaurant_name):
                     website_link = href
 
+            if verbose:
+                log_panel.title = f"✅ Zakończono wyszukiwanie dla: {restaurant_name}"
+                layout['log'].update(log_panel)
+                live.update(layout)
+
             return {'social_links': social_links, 'website': website_link}
 
         except Exception as e:
             if verbose:
-                console.print(f"Błąd podczas wyszukiwania w Google: {str(e)}", "error")
+                log_panel = Panel(f"Błąd podczas wyszukiwania w Google: {str(e)}", title="Logi", border_style="red")
             return -1
         finally:
             Scraper.close_webdriver(driver)
 
     @staticmethod
-    async def get_opening_hours_from_google_maps(google_url, verbose=False):
+    async def get_opening_hours_from_google_maps(google_url, table, log_panel, layout, live, verbose=False):
         """Funkcja do pobierania godzin otwarcia z Google Maps z raportowaniem do konsoli."""
         driver = Scraper.initialize_webdriver()
 
         try:
             if verbose:
-                console.print(f"Pobieranie godzin otwarcia dla: {google_url}")
-
+                log_panel = Panel(f"Pobieranie godzin otwarcia dla: {google_url}", title="Logi", border_style="magenta")
+                layout['log'].update(log_panel)
+                live.update(layout)
+                
             driver.get(google_url)
 
-            # Czekanie na pełne załadowanie strony
             WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
 
-            # Wyświetlenie drzewa elementów w trybie verbose
             if verbose:
-                # Pobieramy stronę jako źródło HTML
                 page_source = driver.page_source
-                # Parsujemy za pomocą BeautifulSoup dla lepszej czytelności
-                soup = BeautifulSoup(page_source, 'html.parser')
-                # Wyświetlamy drzewo elementów body
-                console.print(soup.body.prettify())
+                soup = Scraper.parse_page(page_source)
+                log_panel = Panel(soup.body.prettify(), title="HTML Tree", border_style="cyan")
+                layout['log'].update(log_panel)
+                live.update(layout)
 
-            # Spróbuj znaleźć przycisk zgody Google Consent i kliknąć go
             try:
-                # Lista fraz tekstowych dla różnych wersji językowych przycisku zgody
                 consent_text_variants = [
-                    'Alle akzeptieren',       # Niemiecki
-                    'Zaakceptuj wszystko',    # Polski
-                    'Akceptuj wszystkie',     # Polski
-                    'Accept all',             # Angielski
-                    'Aceptar todo'            # Hiszpański
+                    'Alle akzeptieren',       # German
+                    'Zaakceptuj wszystko',    # Polish
+                    'Akceptuj wszystkie',     # Polish (alternative)
+                    'Accept all',             # English
+                    'Aceptar todo'            # Spanish
                 ]
 
-                consent_button = None
-
-                # Szukamy `div` z tekstem, a następnie klikamy jego rodzica `button`
                 for variant in consent_text_variants:
                     try:
-                        # Znalezienie `div` z tekstem
-                        element = WebDriverWait(driver, 0).until(
+                        element = WebDriverWait(driver, 1).until(
                             EC.presence_of_element_located((By.XPATH, f"//span[contains(text(), '{variant}')]"))
                         )
-
-                        # Znalezienie elementu nadrzędnego (rodzica) `button`
                         parent_button = element.find_element(By.XPATH, './ancestor::button')
-                        
-                        # Kliknięcie w rodzica `button`
                         parent_button.click()
-                        await asyncio.sleep(2)  # Czekamy na załadowanie strony po kliknięciu
-                        
+                        await asyncio.sleep(2)
                         if verbose:
-                            console.print(f"[bold blue]Kliknięto przycisk zgody: {variant}[/bold blue]")
-                        break  # Zatrzymujemy, jeśli kliknięto
-                    except Exception as e:
+                            log_panel = Panel(f"[bold blue]Clicked consent button: {variant}[/bold blue]", title="Logi", border_style="green")
+                            layout['log'].update(log_panel)
+                            live.update(layout)
+                        break
+                    except Exception:
                         if verbose:
-                            console.print(f"[yellow]Nie znaleziono przycisku z tekstem '{variant}'. Próbuję dalej...[/yellow]")
-                        continue
-
-                if not consent_button:
-                    if verbose:
-                        console.print("[yellow]Nie znaleziono przycisku zgody.[/yellow]")
+                            log_panel = Panel(f"[yellow]Consent button with text '{variant}' not found, trying next...[/yellow]", title="Logi", border_style="yellow")
+                            layout['log'].update(log_panel)
+                            live.update(layout)
 
             except Exception as e:
                 if verbose:
-                    console.print(f"[yellow]Błąd podczas klikania przycisku zgody: {e}[/yellow]")
+                    log_panel = Panel(f"[yellow]Error clicking consent button: {e}[/yellow]", title="Logi", border_style="red")
+                    layout['log'].update(log_panel)
+                    live.update(layout)
 
-            # Dalsza część kodu scrapującego
             try:
-                # Różne wersje językowe frazy "Hide open hours"
                 language_variants = [
-                    'Hide open hours',           # EN
-                    'Ukryj godziny otwarcia',    # PL
-                    'Öffnungszeiten für die Woche ausblenden', # DE
-                    'Ocultar horas de apertura'  # ES
+                    'Hide open hours',           # English
+                    'Ukryj godziny otwarcia',    # Polish
+                    'Öffnungszeiten für die Woche ausblenden',  # German
+                    'Ocultar horas de apertura'  # Spanish
                 ]
 
-                # Tworzenie selektorów CSS dla każdej wersji językowej
                 hours_element = None
                 for variant in language_variants:
                     try:
@@ -276,46 +248,53 @@ class Scraper:
                             EC.presence_of_element_located((By.CSS_SELECTOR, f'div[aria-label*="{variant}"]'))
                         )
                         if hours_element:
-                            break  # Znaleziono element, nie trzeba kontynuować
+                            break
                     except Exception:
-                        continue  # Próbujemy kolejny język, jeśli nie znaleziono elementu
+                        continue
 
                 if not hours_element:
-                    console.print("[red]Nie znaleziono elementu z aria-label w żadnej wersji językowej.[/red]")
+                    log_panel = Panel("[red]No element found with aria-label for open hours in any language.[/red]", title="Logi", border_style="red")
+                    layout['log'].update(log_panel)
+                    live.update(layout)
                     return None
 
-                if verbose:
-                    console.print(f"[bold blue]Znaleziony element z aria-label: {hours_element}[/bold blue]")
-
-                # Pobieramy wartość aria-label
                 hours_text = hours_element.get_attribute('aria-label')
-
                 if verbose:
-                    console.print(f"[bold green]Znalezione godziny otwarcia: {hours_text}[/bold green]")
+                    log_panel = Panel(f"[bold green]Found opening hours: {hours_text}[/bold green]", title="Logi", border_style="green")
+                    layout['log'].update(log_panel)
+                    live.update(layout)
 
-                # Usuwamy frazy typu "Hide open hours" lub odpowiedników w innych językach
+                # Remove unwanted phrases and sort hours
                 phrases_to_remove = [
-                    'Öffnungszeiten für die Woche ausblenden',  # DE
-                    'Hide open hours for the week',             # EN
-                    'Ukryj godziny otwarcia na cały tydzień',   # PL
-                    'Ocultar horas de apertura para la semana'  # ES
+                    'Öffnungszeiten für die Woche ausblenden',  # German
+                    'Hide open hours for the week',             # English
+                    'Ukryj godziny otwarcia na cały tydzień',   # Polish
+                    'Ocultar horas de apertura para la semana'  # Spanish
                 ]
                 for phrase in phrases_to_remove:
                     hours_text = hours_text.replace(phrase, '').strip()
 
-                # Sortujemy dni tygodnia według odpowiedniego języka
                 sorted_hours_text = Scraper.sort_hours(hours_text)
+
+                if verbose:
+                    log_panel = Panel(f"[bold green]Sorted hours: {sorted_hours_text}[/bold green]", title="Logi", border_style="green")
+                    layout['log'].update(log_panel)
+                    live.update(layout)
 
                 return sorted_hours_text
 
             except Exception as e:
-                console.print(f"Błąd podczas pobierania godzin otwarcia: {e}")
+                log_panel = Panel(f"[red]Error fetching opening hours: {e}[/red]", title="Logi", border_style="red")
+                layout['log'].update(log_panel)
+                live.update(layout)
                 return None
 
         except Exception as e:
             if verbose:
-                console.print(f"Błąd podczas pobierania danych dla {google_url}: {e}", "error")
+                log_panel = Panel(f"[red]Error loading data for {google_url}: {e}[/red]", title="Logi", border_style="red")
+                layout['log'].update(log_panel)
+                live.update(layout)
         finally:
-            driver.quit()
+            Scraper.close_webdriver(driver)
 
         return None
