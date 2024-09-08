@@ -1,6 +1,17 @@
-# Changelog
+### Changelog
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
+
+## [1.17.0] - 2024-09-09
+
+### Nowe funkcjonalności:
+- **Dynamiczne raportowanie i aktualizowanie statusu przetwarzania danych**: Wprowadzono pełną integrację klasy `Scraper` z biblioteką `rich.live`, umożliwiając dynamiczną aktualizację logów oraz tabeli statusu przetwarzania w czasie rzeczywistym. Każde zadanie, takie jak pobieranie godzin otwarcia czy wyszukiwanie profili społecznościowych, teraz natychmiast odświeża odpowiednie elementy tabeli.
+- **Zautomatyzowana obsługa zgód cookies w różnych językach**: Zaimplementowano automatyczne wyszukiwanie i kliknięcie przycisków zgód na pliki cookies w Google Maps w językach: angielskim, niemieckim, polskim i hiszpańskim. To usprawnia proces pobierania godzin otwarcia w różnych regionach.
+- **Optymalizacja procesu pobierania godzin otwarcia**: Dodano bardziej rozbudowaną obsługę wyjątków oraz wsparcie dla sortowania godzin otwarcia w różnych językach (PL, EN, DE, ES). System teraz lepiej radzi sobie z interpretacją formatu godzin i ich sortowaniem od poniedziałku do niedzieli.
+
+### Poprawki błędów:
+- **Poprawiona aktualizacja statusu w tabeli**: Rozwiązano problem, w którym tabela nie odświeżała statusu zadania po zakończeniu pobierania danych. Teraz każda zmiana statusu, jak również komunikaty błędów, są natychmiastowo wyświetlane w tabeli.
+- **Zwiększona stabilność działania WebDrivera**: Dodano lepsze zarządzanie instancjami WebDrivera, w tym bezpieczne zamykanie sesji po zakończeniu przetwarzania.
 
 ## [1.16.0] - 2024-09-08
 #### Nowe funkcjonalności:
