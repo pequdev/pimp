@@ -2,6 +2,12 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.16.0] - 2024-09-08
+#### Nowe funkcjonalności:
+- **Możliwość wyboru konkretnego arkusza Google**: Dodano opcję `--sheet_name`, która pozwala użytkownikowi na wybranie konkretnego arkusza w pliku Google Sheets, z którym aplikacja ma pracować.
+- **Tworzenie nowego arkusza `UPD/{oryginalna_nazwa_arkusza}`**: Przed zapisaniem danych aplikacja tworzy nowy arkusz o nazwie `UPD/{oryginalna_nazwa_arkusza}`, zamiast nadpisywać oryginalny arkusz, zapewniając tym samym większą elastyczność zarządzania danymi.
+- **Rozszerzone logowanie autoryzacji w trybie verbose**: W trybie verbose dodano bardziej szczegółowe logowanie procesu autoryzacji Google Sheets, aby ułatwić debugowanie oraz śledzenie przebiegu autoryzacji.
+
 ## [1.15.0] - 2024-09-08
 #### Nowe funkcjonalności:
 - **Rozszerzona obsługa akceptacji Google Consent**: Dodano logikę umożliwiającą znalezienie przycisku zgody na pliki cookie na podstawie tekstu w różnych językach (EN, DE, PL, ES). System teraz szuka elementu `div` z odpowiednim tekstem i klika w jego element nadrzędny `button`, co zapewnia skuteczne akceptowanie zgód w różnych lokalizacjach językowych.
@@ -20,7 +26,7 @@ Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 #### Poprawki błędów:
 - **Poprawa obsługi elementu `jsaction`**: Naprawiono błąd związany z niewłaściwym wyszukiwaniem przycisku godzin otwarcia. Teraz `jsaction` jest wyszukiwany na podstawie zawartości, co rozwiązuje problem z nieodnalezieniem elementu na stronie.
 
-#### Zmiany techniczne:
+#### Zmiany techniczne:po 
 - **Lepsze logowanie elementów nadrzędnych**: Dodano logowanie elementu nadrzędnego przycisku "open hours" w konsoli, co ułatwia debugowanie i diagnozowanie problemów podczas operacji kliknięcia.
 
 ## [1.13.0] - 2024-09-06

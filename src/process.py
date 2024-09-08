@@ -1,4 +1,3 @@
-import json
 import pandas as pd
 import asyncio
 from src.scraper import Scraper
@@ -6,8 +5,6 @@ from urllib.parse import urlparse, urlunparse
 from rich.console import Console
 from rich.table import Table
 from rich.live import Live
-from rich.tree import Tree
-from rich.panel import Panel
 
 console = Console()
 

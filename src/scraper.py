@@ -21,7 +21,7 @@ console = Console()
 class Scraper:
     
     @staticmethod
-    def initialize_webdriver(headless=False):
+    def initialize_webdriver(headless=True):
         """Inicjalizacja WebDrivera z odpowiednimi opcjami oraz symulowaną geolokalizacją."""
         
         options = Options()
@@ -192,7 +192,7 @@ class Scraper:
     @staticmethod
     async def get_opening_hours_from_google_maps(google_url, verbose=False):
         """Funkcja do pobierania godzin otwarcia z Google Maps z raportowaniem do konsoli."""
-        driver = Scraper.initialize_webdriver(headless=False)
+        driver = Scraper.initialize_webdriver()
 
         try:
             if verbose:
@@ -231,7 +231,7 @@ class Scraper:
                 for variant in consent_text_variants:
                     try:
                         # Znalezienie `div` z tekstem
-                        element = WebDriverWait(driver, 1).until(
+                        element = WebDriverWait(driver, 0).until(
                             EC.presence_of_element_located((By.XPATH, f"//span[contains(text(), '{variant}')]"))
                         )
 
