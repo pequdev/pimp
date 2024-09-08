@@ -2,6 +2,16 @@
 
 Wszystkie istotne zmiany w aplikacji będą dokumentowane w tym pliku.
 
+## [1.15.0] - 2024-09-08
+#### Nowe funkcjonalności:
+- **Rozszerzona obsługa akceptacji Google Consent**: Dodano logikę umożliwiającą znalezienie przycisku zgody na pliki cookie na podstawie tekstu w różnych językach (EN, DE, PL, ES). System teraz szuka elementu `div` z odpowiednim tekstem i klika w jego element nadrzędny `button`, co zapewnia skuteczne akceptowanie zgód w różnych lokalizacjach językowych.
+- **Dodanie logowania drzewa elementów `body` w trybie verbose**: W trybie verbose dodano funkcjonalność wyświetlania pełnej struktury drzewa elementów `body` przy użyciu BeautifulSoup. Dzięki temu użytkownik może zobaczyć pełną strukturę HTML załadowanej strony bezpośrednio w konsoli, co ułatwia debugowanie i analizę.
+- **Usuwanie zbędnych fraz z godzin otwarcia**: Dodano mechanizm, który usuwa z tekstu godzin otwarcia niepotrzebne frazy, takie jak "Hide open hours" w różnych wersjach językowych, aby uzyskać czyste i poprawnie sformatowane dane.
+
+#### Poprawki błędów:
+- **Naprawa problemu z uruchamianiem WebDrivera w trybie headless na macOS**: Rozwiązano problem z uruchamianiem ChromeDrivera, który generował błąd `DevToolsActivePort file doesn't exist`. Dodano odpowiednie flagi konfiguracyjne (`--no-sandbox`, `--disable-dev-shm-usage`), co zapewnia poprawne działanie aplikacji w trybie headless.
+- **Zwiększenie stabilności działania Google Consent**: Naprawiono błąd, w którym Selenium nie mogło poprawnie znaleźć i kliknąć przycisku zgody Google Consent. Teraz logika wyszukuje odpowiedni `div` z tekstem zgody w różnych językach i klika w rodzica `button`, co zapewnia skuteczniejszą interakcję z elementami strony.
+
 ## [1.14.0] - 2024-09-06
 #### Nowe funkcjonalności:
 - **Poprawa logiki klikania przycisku godzin otwarcia**: Ulepszono mechanizm znajdowania i klikania przycisku "open hours" w Google Maps. Teraz system lokalizuje element zawierający `jsaction="openhours"`, a następnie klika w jego element nadrzędny, co umożliwia poprawne otwarcie panelu z godzinami otwarcia.
