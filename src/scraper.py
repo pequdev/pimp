@@ -43,9 +43,9 @@ class Scraper:
         options.add_argument('--start-maximized')
         options.add_argument('--disable-extensions')
 
-        # Pobranie bieżącej ścieżki katalogu aplikacji
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        profile_path = os.path.join(current_dir, '../data/chrome_profile')
+        # Pobranie katalogu nadrzędnego
+        parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        profile_path = os.path.join(parent_dir, 'data/chrome_profile')
         
         # Dodanie użytkownika, aby pominąć wybór wyszukiwarki
         options.add_argument(f"--user-data-dir={profile_path}")
