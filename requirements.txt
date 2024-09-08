@@ -8,3 +8,5 @@ pytest-asyncio
 beautifulsoup4
 lxml
 webdriver-manager
+google-auth
+gspread
