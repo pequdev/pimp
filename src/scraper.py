@@ -13,6 +13,7 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 import asyncio
 import re
+import os
 from rich.console import Console
 
 console = Console()
@@ -20,33 +21,57 @@ console = Console()
 class Scraper:
     
     @staticmethod
-    def initialize_webdriver(headless=True):
-        """Inicjalizacja WebDrivera z odpowiednimi opcjami."""
+    def initialize_webdriver(headless=False):
+        """Inicjalizacja WebDrivera z odpowiednimi opcjami oraz symulowaną geolokalizacją."""
+        
         options = Options()
+
+        latitude = 38.34486
+        longitude = 0.48550
+        accuracy = 100
+        
+        # Ustawienia headless, jeśli wymagane
         if headless:
-            options.add_argument('--headless')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--headless=new')  # Nowa wersja headless
+
+        # Wyłączenie okna pierwszego uruchomienia
+        options.add_argument("--disable-first-run-ui")
+        options.add_argument('--no-first-run')
+        options.add_argument('--no-default-browser-check')
         options.add_argument('--disable-gpu')
-        options.add_argument('--disable-features=IsolateOrigins,site-per-process')
-        options.add_argument('--disable-infobars')  # Usuwa pasek informacyjny
-        options.add_argument('--disable-extensions')  # Wyłącza rozszerzenia
-        options.add_argument('--start-maximized')  # Maksymalizuje okno
-        options.add_argument('--disable-browser-side-navigation')
-        options.add_argument('--ignore-certificate-errors')
-        options.add_argument('--disable-blink-features=AutomationControlled')  # Ukrywa fakt, że Selenium kontroluje przeglądarkę
-        options.add_argument('--lang=en')  # Ustawienie języka, można zmienić na PL lub DE w zależności od potrzeby
+        options.add_argument('--disable-infobars')
+        options.add_argument('--start-maximized')
+        options.add_argument('--disable-extensions')
 
-        # Dodatkowe opcje, które mogą pomóc
-        prefs = {
-            'profile.default_content_setting_values.cookies': 2,  # Blokuj ciasteczka
-            'profile.default_content_setting_values.images': 2,  # Blokuj obrazy (optymalizacja)
-            'intl.accept_languages': 'en,en_US'  # Ustawienia językowe
-        }
-        options.add_experimental_option('prefs', prefs)
+        # Pobranie bieżącej ścieżki katalogu aplikacji
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        profile_path = os.path.join(current_dir, '../data/chrome_profile')
+        
+        # Dodanie użytkownika, aby pominąć wybór wyszukiwarki
+        options.add_argument(f"--user-data-dir={profile_path}")
 
-        driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-        return driver
+        # Dodatkowe opcje optymalizacyjne
+        options.add_experimental_option('prefs', {
+            'profile.default_content_setting_values.images': 2,
+            'intl.accept_languages': 'en,en_US'
+        })
+
+        try:
+            driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+
+            # Symulacja geolokalizacji
+            if latitude is not None and longitude is not None:
+                driver.execute_cdp_cmd(
+                    "Emulation.setGeolocationOverride", {
+                        "latitude": latitude,
+                        "longitude": longitude,
+                        "accuracy": accuracy
+                    }
+                )
+            return driver
+        except Exception as e:
+            console.print(f"Błąd inicjalizacji WebDrivera: {e}")
+            return None
 
     @staticmethod
     def close_webdriver(driver):
@@ -167,7 +192,7 @@ class Scraper:
     @staticmethod
     async def get_opening_hours_from_google_maps(google_url, verbose=False):
         """Funkcja do pobierania godzin otwarcia z Google Maps z raportowaniem do konsoli."""
-        driver = Scraper.initialize_webdriver(headless=True)
+        driver = Scraper.initialize_webdriver(headless=False)
 
         try:
             if verbose:
@@ -176,21 +201,62 @@ class Scraper:
             driver.get(google_url)
 
             # Czekanie na pełne załadowanie strony
-            WebDriverWait(driver, 10).until(
+            WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
 
-            # Symulacja naciśnięcia TAB i ENTER, aby akceptować pliki cookie
+            # Wyświetlenie drzewa elementów w trybie verbose
+            if verbose:
+                # Pobieramy stronę jako źródło HTML
+                page_source = driver.page_source
+                # Parsujemy za pomocą BeautifulSoup dla lepszej czytelności
+                soup = BeautifulSoup(page_source, 'html.parser')
+                # Wyświetlamy drzewo elementów body
+                console.print(soup.body.prettify())
+
+            # Spróbuj znaleźć przycisk zgody Google Consent i kliknąć go
             try:
-                body = driver.find_element(By.TAG_NAME, 'body')
-                body.send_keys(Keys.TAB * 4)  # W zależności od struktury strony może być konieczna zmiana liczby TAB
-                body.send_keys(Keys.ENTER)
-                await asyncio.sleep(2)  # Czekamy, aby upewnić się, że strona się odświeża po kliknięciu
-                if verbose:
-                    console.print("[bold blue]Symulowano kliknięcie przycisku zgody na pliki cookie.[/bold blue]")
+                # Lista fraz tekstowych dla różnych wersji językowych przycisku zgody
+                consent_text_variants = [
+                    'Alle akzeptieren',       # Niemiecki
+                    'Zaakceptuj wszystko',    # Polski
+                    'Akceptuj wszystkie',     # Polski
+                    'Accept all',             # Angielski
+                    'Aceptar todo'            # Hiszpański
+                ]
+
+                consent_button = None
+
+                # Szukamy `div` z tekstem, a następnie klikamy jego rodzica `button`
+                for variant in consent_text_variants:
+                    try:
+                        # Znalezienie `div` z tekstem
+                        element = WebDriverWait(driver, 1).until(
+                            EC.presence_of_element_located((By.XPATH, f"//span[contains(text(), '{variant}')]"))
+                        )
+
+                        # Znalezienie elementu nadrzędnego (rodzica) `button`
+                        parent_button = element.find_element(By.XPATH, './ancestor::button')
+                        
+                        # Kliknięcie w rodzica `button`
+                        parent_button.click()
+                        await asyncio.sleep(2)  # Czekamy na załadowanie strony po kliknięciu
+                        
+                        if verbose:
+                            console.print(f"[bold blue]Kliknięto przycisk zgody: {variant}[/bold blue]")
+                        break  # Zatrzymujemy, jeśli kliknięto
+                    except Exception as e:
+                        if verbose:
+                            console.print(f"[yellow]Nie znaleziono przycisku z tekstem '{variant}'. Próbuję dalej...[/yellow]")
+                        continue
+
+                if not consent_button:
+                    if verbose:
+                        console.print("[yellow]Nie znaleziono przycisku zgody.[/yellow]")
+
             except Exception as e:
                 if verbose:
-                    console.print("[yellow]Nie udało się symulować kliknięcia przycisku zgody na pliki cookie.[/yellow]")
+                    console.print(f"[yellow]Błąd podczas klikania przycisku zgody: {e}[/yellow]")
 
             # Dalsza część kodu scrapującego
             try:

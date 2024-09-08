@@ -1,4 +1,4 @@
-# Makefile do automatycznej konfiguracji środowiska, instalacji zależności i konfiguracji ChromeDriver
+# Makefile do automatycznej konfiguracji środowiska, instalacji zależności, konfiguracji ChromeDriver i czyszczenia cache
 
 VENV_DIR := venv
 REQUIREMENTS := requirements.txt
@@ -27,6 +27,11 @@ update_venv: venv
 clean_venv:
 	rm -rf $(VENV_DIR)
 
+# Usuwanie cache Pythona
+clean_cache:
+	@echo "Usuwanie katalogów __pycache__ ..."
+	find . -name "__pycache__" -type d -exec rm -r {} +
+
 # Instalacja ChromeDriver za pomocą Homebrew
 chromedriver:
 	@if ! command -v chromedriver &> /dev/null; then \
@@ -47,5 +52,6 @@ help:
 	@echo "  make install      - Instaluje zależności"
 	@echo "  make update_venv  - Aktualizuje zależności po zmianie requirements.txt"
 	@echo "  make clean_venv   - Usuwa stare środowisko venv"
+	@echo "  make clean_cache  - Usuwa katalogi __pycache__"
 	@echo "  make chromedriver - Instaluje ChromeDriver"
 	@echo "  make activate     - Wyświetla polecenie do wejścia w środowisko"
