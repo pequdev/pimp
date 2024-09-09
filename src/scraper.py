@@ -1,28 +1,20 @@
-import json
-import time
+import os
+import re
+from urllib.parse import urlparse
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException
-from selenium.webdriver.common.keys import Keys
-from bs4 import BeautifulSoup
-from urllib.parse import urlparse
 from selenium.webdriver.chrome.options import Options
+from bs4 import BeautifulSoup
 from webdriver_manager.chrome import ChromeDriverManager
-import asyncio
-import re
-import os
 from rich.console import Console
-from rich.panel import Panel
-from rich.live import Live
-from rich.table import Table
 
 console = Console()
 
 class Scraper:
-    
+
     @staticmethod
     def initialize_webdriver(headless=True):
         """Inicjalizacja WebDrivera z odpowiednimi opcjami oraz symulowaną geolokalizacją."""
@@ -31,11 +23,10 @@ class Scraper:
         latitude = 38.34486
         longitude = 0.48550
         accuracy = 100
-        
-        if headless:
-            options.add_argument('--headless=new')  # Nowa wersja headless
 
-        # Wyłączenie okna pierwszego uruchomienia
+        if headless:
+            options.add_argument('--headless=new')
+
         options.add_argument("--disable-first-run-ui")
         options.add_argument('--no-first-run')
         options.add_argument('--no-default-browser-check')
@@ -55,14 +46,11 @@ class Scraper:
 
         try:
             driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-
-            driver.execute_cdp_cmd(
-                "Emulation.setGeolocationOverride", {
-                    "latitude": latitude,
-                    "longitude": longitude,
-                    "accuracy": accuracy
-                }
-            )
+            driver.execute_cdp_cmd("Emulation.setGeolocationOverride", {
+                "latitude": latitude,
+                "longitude": longitude,
+                "accuracy": accuracy
+            })
             return driver
         except Exception as e:
             console.print(f"Błąd inicjalizacji WebDrivera: {e}")
@@ -75,8 +63,43 @@ class Scraper:
             driver.quit()
 
     @staticmethod
+    def _check_consent_cookie(driver):
+        """Sprawdza, czy zgoda na cookies została już zapisana w plikach cookies przeglądarki."""
+        cookies = driver.get_cookies()
+        consent_cookies = [cookie for cookie in cookies if "CONSENT" in cookie['name']]
+        if consent_cookies:
+            console.print("[blue]Zgoda na cookies już zapisana.[/blue]")
+            return True
+        return False
+
+    @staticmethod
+    def _handle_google_consent(driver, verbose=False):
+        """Obsługuje zgodę na pliki cookies w Google w różnych językach."""
+        if Scraper._check_consent_cookie(driver):
+            return
+
+        consent_text_variants = [
+            'Alle akzeptieren', 'Zaakceptuj wszystko', 'Akceptuj wszystkie', 
+            'Accept all', 'Aceptar todo'
+        ]
+        for variant in consent_text_variants:
+            try:
+                element = WebDriverWait(driver, 2).until(
+                    EC.presence_of_element_located((By.XPATH, f"//span[contains(text(), '{variant}')]"))
+                )
+                parent_button = element.find_element(By.XPATH, './ancestor::button')
+                parent_button.click()
+                if verbose:
+                    console.print(f"[blue]Kliknięto przycisk zgody: {variant}[/blue]")
+                return True
+            except Exception:
+                if verbose:
+                    console.print(f"[yellow]Brak przycisku zgody z tekstem: {variant}[/yellow]")
+        return False
+
+    @staticmethod
     def parse_page(html_content):
-        """Metoda do parsowania HTML za pomocą BeautifulSoup."""
+        """Parsuje stronę HTML za pomocą BeautifulSoup."""
         return BeautifulSoup(html_content, 'html.parser')
 
     @staticmethod
@@ -121,119 +144,25 @@ class Scraper:
         return sorted_hours_text
 
     @staticmethod
-    async def search_google(query, restaurant_name, table, log_panel, layout, live, verbose=False):
-        """Funkcja do wyszukiwania w Google i znajdowania wyników społecznościowych oraz stron domowych."""
-        driver = Scraper.initialize_webdriver()
-
-        try:
-            search_url = f"https://www.google.es/search?q={query}"
-            driver.get(search_url)
-            await asyncio.sleep(2)
-
-            page_source = driver.page_source
-            soup = Scraper.parse_page(page_source)
-
-            links = soup.find_all('a', href=True)
-            social_links = {
-                'instagram': None,
-                'tiktok': None,
-                'facebook': None,
-                'youtube': None,
-                'tripadvisor': None,
-                'thefork': None
-            }
-            website_link = None
-
-            for link in links:
-                href = link['href']
-                if 'instagram.com' in href and not social_links['instagram']:
-                    social_links['instagram'] = href
-                elif 'tiktok.com' in href and not social_links['tiktok']:
-                    social_links['tiktok'] = href
-                elif 'facebook.com' in href and not social_links['facebook']:
-                    social_links['facebook'] = href
-                elif 'youtube.com' in href and not social_links['youtube']:
-                    social_links['youtube'] = href
-                elif 'tripadvisor.com' in href and not social_links['tripadvisor']:
-                    social_links['tripadvisor'] = href
-                elif 'thefork.com' in href and not social_links['thefork']:
-                    social_links['thefork'] = href
-                elif 'http' in href and Scraper.is_potential_website(href, restaurant_name):
-                    website_link = href
-
-            if verbose:
-                log_panel.title = f"✅ Zakończono wyszukiwanie dla: {restaurant_name}"
-                layout['log'].update(log_panel)
-                live.update(layout)
-
-            return {'social_links': social_links, 'website': website_link}
-
-        except Exception as e:
-            if verbose:
-                log_panel = Panel(f"Błąd podczas wyszukiwania w Google: {str(e)}", title="Logi", border_style="red")
-            return -1
-        finally:
-            Scraper.close_webdriver(driver)
-
-    @staticmethod
-    async def get_opening_hours_from_google_maps(google_url, table, log_panel, layout, live, verbose=False):
-        """Funkcja do pobierania godzin otwarcia z Google Maps z raportowaniem do konsoli."""
+    def get_opening_hours_from_google_maps(google_url, verbose=False):
+        """Pobieranie godzin otwarcia z Google Maps."""
         driver = Scraper.initialize_webdriver()
 
         try:
             if verbose:
-                log_panel = Panel(f"Pobieranie godzin otwarcia dla: {google_url}", title="Logi", border_style="magenta")
-                layout['log'].update(log_panel)
-                live.update(layout)
-                
+                console.print(f"Pobieranie godzin otwarcia dla: {google_url}")
+
             driver.get(google_url)
+
+            # Obsługa zgody na cookies
+            Scraper._handle_google_consent(driver, verbose)
 
             WebDriverWait(driver, 2).until(
                 EC.presence_of_element_located((By.TAG_NAME, 'body'))
             )
 
-            if verbose:
-                page_source = driver.page_source
-                soup = Scraper.parse_page(page_source)
-                log_panel = Panel(soup.body.prettify(), title="HTML Tree", border_style="cyan")
-                layout['log'].update(log_panel)
-                live.update(layout)
-
             try:
-                consent_text_variants = [
-                    'Alle akzeptieren',       # German
-                    'Zaakceptuj wszystko',    # Polish
-                    'Akceptuj wszystkie',     # Polish (alternative)
-                    'Accept all',             # English
-                    'Aceptar todo'            # Spanish
-                ]
-
-                for variant in consent_text_variants:
-                    try:
-                        element = WebDriverWait(driver, 1).until(
-                            EC.presence_of_element_located((By.XPATH, f"//span[contains(text(), '{variant}')]"))
-                        )
-                        parent_button = element.find_element(By.XPATH, './ancestor::button')
-                        parent_button.click()
-                        await asyncio.sleep(2)
-                        if verbose:
-                            log_panel = Panel(f"[bold blue]Clicked consent button: {variant}[/bold blue]", title="Logi", border_style="green")
-                            layout['log'].update(log_panel)
-                            live.update(layout)
-                        break
-                    except Exception:
-                        if verbose:
-                            log_panel = Panel(f"[yellow]Consent button with text '{variant}' not found, trying next...[/yellow]", title="Logi", border_style="yellow")
-                            layout['log'].update(log_panel)
-                            live.update(layout)
-
-            except Exception as e:
-                if verbose:
-                    log_panel = Panel(f"[yellow]Error clicking consent button: {e}[/yellow]", title="Logi", border_style="red")
-                    layout['log'].update(log_panel)
-                    live.update(layout)
-
-            try:
+                # Wyszukiwanie elementu z godzinami otwarcia
                 language_variants = [
                     'Hide open hours',           # English
                     'Ukryj godziny otwarcia',    # Polish
@@ -253,18 +182,15 @@ class Scraper:
                         continue
 
                 if not hours_element:
-                    log_panel = Panel("[red]No element found with aria-label for open hours in any language.[/red]", title="Logi", border_style="red")
-                    layout['log'].update(log_panel)
-                    live.update(layout)
+                    if verbose:
+                        console.print(f"[red]Nie znaleziono elementu z godzinami otwarcia.[/red]")
                     return None
 
                 hours_text = hours_element.get_attribute('aria-label')
                 if verbose:
-                    log_panel = Panel(f"[bold green]Found opening hours: {hours_text}[/bold green]", title="Logi", border_style="green")
-                    layout['log'].update(log_panel)
-                    live.update(layout)
+                    console.print(f"[bold green]Znaleziono godziny otwarcia: {hours_text}[/bold green]")
 
-                # Remove unwanted phrases and sort hours
+                # Usunięcie niepotrzebnych fraz i sortowanie godzin
                 phrases_to_remove = [
                     'Öffnungszeiten für die Woche ausblenden',  # German
                     'Hide open hours for the week',             # English
@@ -277,23 +203,20 @@ class Scraper:
                 sorted_hours_text = Scraper.sort_hours(hours_text)
 
                 if verbose:
-                    log_panel = Panel(f"[bold green]Sorted hours: {sorted_hours_text}[/bold green]", title="Logi", border_style="green")
-                    layout['log'].update(log_panel)
-                    live.update(layout)
+                    console.print(f"[bold green]Posortowane godziny: {sorted_hours_text}[/bold green]")
 
                 return sorted_hours_text
 
             except Exception as e:
-                log_panel = Panel(f"[red]Error fetching opening hours: {e}[/red]", title="Logi", border_style="red")
-                layout['log'].update(log_panel)
-                live.update(layout)
+                if verbose:
+                    console.print(f"[red]Błąd podczas pobierania godzin otwarcia: {e}[/red]")
                 return None
 
         except Exception as e:
             if verbose:
-                log_panel = Panel(f"[red]Error loading data for {google_url}: {e}[/red]", title="Logi", border_style="red")
-                layout['log'].update(log_panel)
-                live.update(layout)
+                console.print(f"[red]Błąd ładowania danych z {google_url}: {e}[/red]")
+            return None
+
         finally:
             Scraper.close_webdriver(driver)
 

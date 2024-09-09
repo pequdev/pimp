@@ -3,6 +3,7 @@ import click
 import asyncio
 import pandas as pd
 import gspread
+from concurrent.futures import ProcessPoolExecutor
 from google.auth.transport.requests import Request
 from google.oauth2.service_account import Credentials
 from src.process import Process
@@ -40,7 +41,7 @@ class GoogleSheetsManager:
         
         return creds
 
-    def get_google_sheet_as_df(self, sheet_id, sheet_name, sheet_range):
+    def get_google_sheet_as_df(self, sheet_id, sheet_name):
         """Pobiera dane z Google Sheets jako DataFrame."""
         if self.verbose:
             console.print(f"[yellow]🔄 Pobieranie danych z arkusza Google Sheets o ID: {sheet_id} i nazwie: {sheet_name}[/yellow]")
@@ -49,21 +50,21 @@ class GoogleSheetsManager:
         data = sheet.get_all_records()
         
         if self.verbose:
-            console.print(f"[bold green]✅ Pobrano dane z zakresu {sheet_range} arkusza {sheet_name} (ID: {sheet_id})[/bold green]")
+            console.print(f"[bold green]✅ Pobrano dane z arkusza {sheet_name} (ID: {sheet_id})[/bold green]")
         
         return pd.DataFrame(data)
 
-    def update_google_sheet_from_df(self, sheet_id, sheet_name, sheet_range, df):
+    def update_google_sheet_from_df(self, sheet_id, sheet_name, df):
         """Aktualizuje Google Sheets danymi z DataFrame."""
         if self.verbose:
             console.print(f"[yellow]🔄 Aktualizacja arkusza Google Sheets o ID: {sheet_id} i nazwie: {sheet_name}[/yellow]")
         
         sheet = self.client.open_by_key(sheet_id).worksheet(sheet_name)
         data = df.values.tolist()
-        sheet.update(sheet_range, data)
+        sheet.update(f"A1:Z{len(df) + 1}", data)
         
         if self.verbose:
-            console.print(f"[bold green]✅ Pomyślnie zaktualizowano dane w arkuszu {sheet_name} (ID: {sheet_id}) w zakresie {sheet_range}[/bold green]")
+            console.print(f"[bold green]✅ Pomyślnie zaktualizowano dane w arkuszu {sheet_name} (ID: {sheet_id})[/bold green]")
 
     def create_new_sheet(self, sheet_id, original_sheet_name):
         """Tworzy nowy arkusz na podstawie oryginalnego arkusza."""
@@ -94,19 +95,31 @@ class CommandManager:
 
     async def process_social_data(self):
         """Przetwarzanie danych społecznościowych."""
-        # Use Process class for live rendering
         df, found_count, missing_count = await Process.process_social_data(
             self.df, self.cache, self.verbose, self.table, self.log_panel, self.layout, self.live
         )
         return df, found_count, missing_count
 
-    async def process_hours(self):
-        """Przetwarzanie godzin otwarcia."""
-        # Use Process class for live rendering
-        df, found_count, missing_count = await Process.process_hours(
-            self.df, self.verbose, self.table, self.log_panel, self.layout, self.live
-        )
-        return df, found_count, missing_count
+    async def process_hours(self, executor):
+        """Przetwarzanie godzin otwarcia z multiprocesingiem."""
+        loop = asyncio.get_event_loop()
+        tasks = []
+
+        for index, row in self.df.iterrows():
+            google_url = row['Google']
+            if google_url:
+                # WebDriver będzie inicjowany w procesie, więc nie przekazujemy layout, live ani WebDrivera.
+                task = loop.run_in_executor(
+                    executor, Scraper.get_opening_hours_from_google_maps, google_url, self.verbose
+                )
+                tasks.append(task)
+
+        results = await asyncio.gather(*tasks)
+        
+        for result, index in zip(results, range(len(self.df))):
+            if result:
+                self.df.at[index, 'Hours'] = result
+        return self.df
 
 
 def initialize_cache(use_cache):
@@ -119,12 +132,11 @@ def initialize_cache(use_cache):
 @click.command()
 @click.option('--sheet_id', required=True, help='ID arkusza Google Sheets z danymi.')
 @click.option('--sheet_name', required=True, help='Nazwa arkusza Google Sheets do użycia.')
-@click.option('--sheet_range', default='A1:Z1000', help='Zakres danych w arkuszu Google Sheets.')
 @click.option('--use_cache', is_flag=True, help='Czy używać cache do przyspieszenia wyszukiwań?')
 @click.option('--verbose', is_flag=True, help='Wyświetlaj szczegółowe informacje o przebiegu.')
 @click.option('--social', is_flag=True, help='Uzupełniaj brakujące profile społecznościowe.')
 @click.option('--hours', is_flag=True, help="Pobierz godziny otwarcia z Google Maps.")
-def main(sheet_id, sheet_name, sheet_range, use_cache, verbose, social, hours):
+def main(sheet_id, sheet_name, use_cache, verbose, social, hours):
     """
     Skrypt uzupełnia brakujące dane w arkuszu Google Sheets poprzez wyszukiwanie informacji na Google.
     Arkusz Google należy zapodać przez --sheet_id i --sheet_name, a wynik zostanie zapisany w tym samym arkuszu.
@@ -140,7 +152,7 @@ def main(sheet_id, sheet_name, sheet_range, use_cache, verbose, social, hours):
 
     # Próba wczytania danych z Google Sheets
     try:
-        df = sheets_manager.get_google_sheet_as_df(sheet_id, sheet_name, sheet_range)
+        df = sheets_manager.get_google_sheet_as_df(sheet_id, sheet_name)
         console.print(f"[bold green]✅ Wczytano dane z arkusza {sheet_name} (ID: {sheet_id}).[/bold green]")
     except Exception as e:
         console.print(f"[bold red]❌ Błąd przy wczytywaniu danych z arkusza: {e}[/bold red]")
@@ -163,34 +175,40 @@ def main(sheet_id, sheet_name, sheet_range, use_cache, verbose, social, hours):
         Layout(log_panel, name="log")
     )
 
-    with Live(layout, console=console, refresh_per_second=4) as live:
-        command_manager = CommandManager(df, cache, verbose, table, log_panel, layout, live)
+    async def run_tasks():
+        with Live(layout, console=console, refresh_per_second=4) as live:
+            command_manager = CommandManager(df, cache, verbose, table, log_panel, layout, live)
 
-        # Przetwarzanie danych społecznościowych
-        if social:
-            asyncio.run(command_manager.process_social_data())
+            # Przetwarzanie danych społecznościowych
+            if social:
+                await command_manager.process_social_data()
 
-        # Przetwarzanie godzin otwarcia
-        if hours:
-            asyncio.run(command_manager.process_hours())
+            # Przetwarzanie godzin otwarcia z multiprocessingiem
+            if hours:
+                with ProcessPoolExecutor() as executor:
+                    # Usunięcie `layout`, `table`, `log_panel` i `live` z wywołań zewnętrznych procesów.
+                    await command_manager.process_hours(executor)
 
-    # Tworzenie nowego arkusza o nazwie UPD/nazwa_oryginalna
-    try:
-        new_sheet_name = sheets_manager.create_new_sheet(sheet_id, sheet_name)
-    except Exception as e:
-        console.print(f"[bold red]❌ Błąd podczas tworzenia nowego arkusza: {e}[/bold red]")
-        return
+        # Tworzenie nowego arkusza o nazwie UPD/nazwa_oryginalna
+        try:
+            new_sheet_name = sheets_manager.create_new_sheet(sheet_id, sheet_name)
+        except Exception as e:
+            console.print(f"[bold red]❌ Błąd podczas tworzenia nowego arkusza: {e}[/bold red]")
+            return
 
-    # Aktualizacja nowego arkusza Google Sheets
-    try:
-        sheets_manager.update_google_sheet_from_df(sheet_id, new_sheet_name, sheet_range, command_manager.df)
-        console.print(f"[bold green]✅ Zaktualizowano dane w nowym arkuszu {new_sheet_name} (ID: {sheet_id}).[/bold green]")
-    except Exception as e:
-        console.print(f"[bold red]❌ Błąd podczas aktualizacji arkusza: {e}[/bold red]")
+        # Aktualizacja nowego arkusza Google Sheets
+        try:
+            sheets_manager.update_google_sheet_from_df(sheet_id, new_sheet_name, command_manager.df)
+            console.print(f"[bold green]✅ Zaktualizowano dane w nowym arkuszu {new_sheet_name} (ID: {sheet_id}).[/bold green]")
+        except Exception as e:
+            console.print(f"[bold red]❌ Błąd podczas aktualizacji arkusza: {e}[/bold red]")
 
-    # Zapis cache (jeśli używany)
-    if cache:
-        cache.save_cache()
+        # Zapis cache (jeśli używany)
+        if cache:
+            cache.save_cache()
+
+    # Uruchomienie zadań w ramach jednej sesji asyncio
+    asyncio.run(run_tasks())
 
 if __name__ == "__main__":
     main()
